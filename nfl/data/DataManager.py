@@ -24,11 +24,13 @@ bool_columns = ["qb_kneel",
 
 drop_columns = ["play_id",
                 "jersey_number",
-                "player_id"]
+                "player_id,"
+                "old_game_id",
+                "player_name"]
 
 class DataManager():
     @classmethod
-    def get_data(cls, path_to_json: str) -> pd.DataFrame:
+    def get_data(cls, path_to_json: Path) -> pd.DataFrame:
         all_df = pd.DataFrame()
         path = Path(path_to_json)
         for f in path.glob('*.csv'):
@@ -56,7 +58,7 @@ class DataManager():
             if any(sub in col for sub in cols_to_drop)
         ]
         
-        # drop inplace or return the copy
+        print(matched_columns)
         cleaned_df = df.drop(columns=matched_columns)
         return cleaned_df
 
