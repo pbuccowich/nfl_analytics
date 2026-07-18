@@ -176,7 +176,55 @@ class Result(StrEnum):
     FAILURE = "failure"
     SUCCESS = "success"
 
+class Half(StrEnum):
+    FIRST = "Half1"
+    SECOND = "Half2"
+    OVERTIME = "Overtime"
 
+class DriveResult(StrEnum):
+    PUNT = "Punt"
+    TOUCHDOWN = "Touchdown"
+    TURNOVER = "Turnover"
+    FIELD_GOAL = "Field goal"
+    MISSED_FIELD_GOAL = "Missed field goal"
+    OPP_TOUCHDOWN = "Opp touchdown"
+    END_OF_HALF = "End of half"
+    SAFTEY = "Saftey"
+    TURNOVER_ON_DOWNS = "Turnover on downs"
 
+class SpecialTeamsPlayType(StrEnum):
+    PENALTY = 'Penalty'
 
-
+class DriveStartReason(StrEnum):
+    PUNT = "Punt"
+    TOUCHDOWN = "Touchdown"
+    INTERCEPTION = "Interception"
+    FUMBLE = "Fumble"
+    FIELD_GOAL = "Field Goal"
+    BLOCKED_FG = "Blocked FG"
+    END_OF_HALF = "End of Half"
+    MISSED_FG = "Missed FG"
+    SAFETY = "Safety"
+    DOWNS = "Downs"
+    FUMBLE_SAFETY = "Fumble, Safety"
+    BLOCKED_PUNT = "Blocked Punt"
+    BLOCKED_PUNT_DOWNS = "Blocked Punt, Downs"
+    BLOCKED_FG_DOWNS = "Blocked FG, Downs"
+    UNKNOWN = "UNKNOWN"
+    KICKOFF = "KICKOFF"
+    PUNT_UPPER = "PUNT"
+    INTERCEPTION_UPPER = "INTERCEPTION"
+    FUMBLE_UPPER = "FUMBLE"
+    DOWNS_UPPER = "DOWNS"
+    MISSED_FG_UPPER = "MISSED_FG"
+    BLOCKED_FG_UPPER = "BLOCKED_FG"
+    BLOCKED_FG_DOWNS_UPPER = "BLOCKED_FG,_DOWNS"
+    MUFFED_PUNT = "MUFFED_PUNT"
+    ONSIDE_KICK = "ONSIDE_KICK"
+    BLOCKED_PUNT_UPPER = "BLOCKED_PUNT"
+    BLOCKED_PUNT_DOWNS_UPPER = "BLOCKED_PUNT,_DOWNS"
+    MUFFED_KICKOFF = "MUFFED_KICKOFF"
+    BLOCKED_PUNT_DOWNS_ALT = "BLOCKED_PUNT_DOWNS"
+    OWN_KICKOFF = "OWN_KICKOFF"
+    MUFFED_FG = "MUFFED_FG"
+    BLOCKED_FG_DOWNS_ALT = "BLOCKED_FG_DOWNS"
