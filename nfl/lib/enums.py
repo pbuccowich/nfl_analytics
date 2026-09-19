@@ -233,3 +233,9 @@ class DriveStartReason(StrEnum):
     OWN_KICKOFF = "OWN_KICKOFF"
     MUFFED_FG = "MUFFED_FG"
     BLOCKED_FG_DOWNS_ALT = "BLOCKED_FG_DOWNS"
+
+class RoofType(StrEnum):
+    OUTDOORS = "outdoors"
+    CLOSED = "closed"
+    DOME = "dome"
+    OPEN = "open"

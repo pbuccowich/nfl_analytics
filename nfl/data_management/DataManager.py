@@ -28,6 +28,7 @@ ENUM_MAP = {
     "half": enums.Half,
     "drive_result": enums.DriveResult,
     "drive_start_reason": enums.DriveStartReason,
+    "roof": enums.RoofType
 }
 
 class DataManager():
