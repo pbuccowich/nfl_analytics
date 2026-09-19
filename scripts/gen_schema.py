@@ -53,12 +53,24 @@ ENUM_MAP = {
     "game_half": enums.Half,
     "fixed_drive_result": enums.DriveResult,
     "special_teams_play_type": enums.SpecialTeamsPlayType,
-    "drive_start_transition": enums.DriveStartReason
+    "drive_start_transition": enums.DriveStartReason,
+    "play_type": enums.PlayType,
+    "pass_length": enums.PassType,
+    "team_type": enums.TeamType,
+    "penalty_type": enums.PenaltyType,
+    "surface_type": enums.SurfaceType,
+    "nfl_play_type": enums.NFLPlayType,
+    "run_location": enums.RunLocations,
+    "run_gap": enums.RunGaps,
+    "half": enums.Half,
+    "drive_result": enums.DriveResult,
+    "drive_start_reason": enums.DriveStartReason,
+
 }
 
 def get_column_config(col_name, raw_dtype):
     # Determine type
-    dtype = TYPE_OVERRIDES.get(col_name, raw_dtype.replace('Column(', '').replace(')', ''))
+    dtype = TYPE_LOOKUP.get(col_name, raw_dtype.replace('Column(', '').replace(')', ''))
     
     config = {
         "type": dtype or "object",

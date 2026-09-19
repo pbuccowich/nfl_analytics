@@ -2,6 +2,33 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import yaml
+from nfl.lib import enums
+from collections import defaultdict
+
+ENUM_MAP = {
+    "home_team": enums.NFLTeam,
+    "away_team": enums.NFLTeam,
+    "season_type": enums.SeasonType,
+    "posteam": enums.NFLTeam,
+    "posteam_type": enums.TeamType,
+    "defteam": enums.NFLTeam,
+    "side_of_field": enums.NFLTeam,
+    "game_half": enums.Half,
+    "fixed_drive_result": enums.DriveResult,
+    "special_teams_play_type": enums.SpecialTeamsPlayType,
+    "drive_start_transition": enums.DriveStartReason,
+    "play_type": enums.PlayType,
+    "pass_length": enums.PassType,
+    "team_type": enums.TeamType,
+    "penalty_type": enums.PenaltyType,
+    "surface_type": enums.SurfaceType,
+    "nfl_play_type": enums.NFLPlayType,
+    "run_location": enums.RunLocations,
+    "run_gap": enums.RunGaps,
+    "half": enums.Half,
+    "drive_result": enums.DriveResult,
+    "drive_start_reason": enums.DriveStartReason,
+}
 
 class DataManager():
     # Load configuration once at the class level when the module imports
@@ -26,12 +53,12 @@ class DataManager():
         for f in path.glob('*.csv'):
             print(f"reading {f}")
             _df = pd.read_csv(f, 
-                            low_memory=False,
-                            parse_dates=cls.date_columns)  # Fixed: using cls.date_columns
+                             low_memory=False,
+                             parse_dates=cls.date_columns)
             all_df = pd.concat([all_df, _df], ignore_index=True)
-            
+
         return cls.clean_data(all_df)
-    
+
     @classmethod
     def _normalize_to_boolean(cls, df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
         target_cols = [c for c in columns if c in df.columns]
@@ -76,6 +103,15 @@ class DataManager():
         return (dates - baseline).dt.days
 
     @classmethod
+    def _cast_to_enums(cls, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        for col, enum_class in ENUM_MAP.items():
+            if col in df.columns:
+                df[col] = df[col].map(lambda x: enum_class(x) if pd.notnull(x) else x)
+
+        return df
+    
+    @classmethod
     def clean_data(cls, data: pd.DataFrame) -> pd.DataFrame:
         corrected_bool = cls._normalize_to_boolean(data, cls.bool_columns)
         normalized_yardlines = cls._normalize_yardlines(corrected_bool, cls.yardline_columns)
@@ -85,4 +121,6 @@ class DataManager():
         normalized_yardlines["day_of_season"] = cls._get_day_of_season(normalized_yardlines[date_col_name])
         
         dropped_columns = cls._drop_columns(normalized_yardlines, cls.drop_columns)
-        return dropped_columns
+        switch_to_enums = cls._cast_to_enums(dropped_columns)
+
+        return switch_to_enums

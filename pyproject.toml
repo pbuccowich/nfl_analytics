@@ -9,6 +9,8 @@ dependencies = [
     "torch",
     "pandas",
     "numpy",
+    "pandera",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]

@@ -44,6 +44,7 @@ class PlayType(StrEnum):
     NO_PLAY = "no_play"
     QB_KNEEL = "qb_kneel"
     QB_SPIKE = "qb_spike"
+    GAME_START = "game_start"
 
 class PassType(StrEnum):
     SHORT = "short"
@@ -127,6 +128,10 @@ class PenaltyType(StrEnum):
     HIP_DROP_TACKLE = "Hip Drop Tackle"
     ILLEGAL_SCRIMMAGE_KICK = "Illegal Scrimmage Kick"
     ILLEGAL_KICK = "Illegal Kick"
+    PLAYER_OUT_OF_BOUNDS_ON_PUNT = "Player Out of Bounds on Punt"
+    ILLGEAL_PROCEDURE = "Illegal Procedure"
+    ILLEGAL_RECIEVER_PASS = "Illegal Receiver Pass"
+    HORSE_COLLAR = "Horse Collar"
 
 class SurfaceType(StrEnum):
     GRASS = "grass"
