@@ -65,7 +65,6 @@ ENUM_MAP = {
     "half": enums.Half,
     "drive_result": enums.DriveResult,
     "drive_start_reason": enums.DriveStartReason,
-
 }
 
 def get_column_config(col_name, raw_dtype):
