@@ -31,7 +31,7 @@ class Solver:
         self.hparams = hparams
         self.bestModel = None
 
-    def train(self, x, y, x_v, y_v, modelName=None, saveBest=True):
+    def train(self, x, y, x_v, y_v, modelName=None, saveBest=True) -> dict:
         # Handle input tensors directly without re-wrapping
         train_ds = TensorDataset(
             (
@@ -68,6 +68,7 @@ class Solver:
         training_loss = np.empty(shape=(self.num_epochs,))
         validation_loss = np.empty(shape=(self.num_epochs,))
         best_valid_loss = float("inf")
+        best_epoch = 0
 
         for epoch in range(self.num_epochs):
             # --- Training Phase ---
@@ -76,7 +77,6 @@ class Solver:
 
             for inputs, targets in train_loader:
                 inputs = inputs.to(self.device)
-                # Ensure targets match output shape (batch_size, 1)
                 targets = targets.to(self.device).view(-1, 1)
 
                 self.optimizer.zero_grad()
@@ -117,6 +117,7 @@ class Solver:
             # --- Model Checkpointing ---
             if epoch_valid_loss < best_valid_loss:
                 best_valid_loss = epoch_valid_loss
+                best_epoch = epoch
                 if saveBest:
                     self.bestModel = copy.deepcopy(self.model)
 
@@ -126,7 +127,11 @@ class Solver:
                     f"Train Loss: {epoch_train_loss:.4f} | "
                     f"Valid Loss: {epoch_valid_loss:.4f}"
                 )
-            self.writer.flush()
+
+            if self.writer:
+                self.writer.flush()
+
+        final_train_loss = float(training_loss[-1])
 
         # --- TensorBoard HParams Logging (End of Run) ---
         if self.writer and self.hparams:
@@ -134,7 +139,7 @@ class Solver:
                 hparam_dict=self.hparams,
                 metric_dict={
                     "hparam/best_val_loss": float(best_valid_loss),
-                    "hparam/final_train_loss": float(training_loss[-1]),
+                    "hparam/final_train_loss": final_train_loss,
                 },
                 run_name=self.run_name,
             )
@@ -143,4 +148,8 @@ class Solver:
             save_path = pathlib.Path(__file__).parent / f"{modelName}.pth"
             torch.save(self.bestModel.state_dict(), save_path)
 
-        return training_loss, validation_loss, best_valid_loss
+        return {
+            "best_val_loss": float(best_valid_loss),
+            "final_train_loss": final_train_loss,
+            "best_epoch": int(best_epoch),
+        }
