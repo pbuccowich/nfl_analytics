@@ -12,6 +12,7 @@ dependencies = [
     "pandera",
     "pyyaml",
     "tensorboard",
+    "optuna",
 ]
 
 [project.optional-dependencies]

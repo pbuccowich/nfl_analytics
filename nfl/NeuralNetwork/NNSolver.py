@@ -19,6 +19,7 @@ class Solver:
         writer: SummaryWriter = None,
         run_name: str = None,
         hparams: dict = None,
+        optuna_trial=None,
     ):
         self.model = model
         self.device = device
@@ -29,6 +30,7 @@ class Solver:
         self.writer = writer
         self.run_name = run_name or "default_run"
         self.hparams = hparams
+        self.optuna_trial = optuna_trial
         self.bestModel = None
 
     def train(self, x, y, x_v, y_v, modelName=None, saveBest=True) -> dict:
@@ -105,11 +107,16 @@ class Solver:
             epoch_valid_loss = valid_running_loss / len(valid_ds)
             validation_loss[epoch] = epoch_valid_loss
 
+            # --- Optuna Intermediate Pruning ---
+            if self.optuna_trial is not None:
+                import optuna
+                self.optuna_trial.report(epoch_valid_loss, epoch)
+                if self.optuna_trial.should_prune():
+                    raise optuna.Exceptions.TrialPruned()
+
             # --- Unified TensorBoard Logging ---
             if self.writer:
-                # Graphs all runs on one plot for 'Loss/Train'
                 self.writer.add_scalars("Loss/Train", {self.run_name: epoch_train_loss}, epoch)
-                # Graphs all runs on one plot for 'Loss/Validation'
                 self.writer.add_scalars("Loss/Validation", {self.run_name: epoch_valid_loss}, epoch)
 
             # --- Model Checkpointing ---
