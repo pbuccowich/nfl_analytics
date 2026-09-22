@@ -16,9 +16,9 @@ class Solver:
         batch_size,
         optimizer,
         criterion,
-        writer: SummaryWriter = None,
-        run_name: str = None,
-        hparams: dict = None,
+        writer: SummaryWriter | None = None,
+        run_name: str | None = None,
+        hparams: dict | None = None,
         optuna_trial=None,
     ):
         self.model = model
