@@ -23,7 +23,7 @@ class Solver:
         self.model = model
         self.device = device
         self.num_epochs = num_epochs
-        self.batch_size = int(batch_size)  # Guard against numpy scalar types
+        self.batch_size = int(batch_size)
         self.optimizer = optimizer
         self.criterion = criterion
         self.writer = writer
@@ -32,7 +32,6 @@ class Solver:
         self.bestModel = None
 
     def train(self, x, y, x_v, y_v, modelName=None, saveBest=True) -> dict:
-        # Handle input tensors directly without re-wrapping
         train_ds = TensorDataset(
             (
                 x.detach().clone().to(torch.float32)
@@ -106,12 +105,14 @@ class Solver:
             epoch_valid_loss = valid_running_loss / len(valid_ds)
             validation_loss[epoch] = epoch_valid_loss
 
-            # --- TensorBoard Logging (Per Epoch) ---
+            # --- Unified TensorBoard Logging ---
             if self.writer:
-                self.writer.add_scalars(
-                    f"Loss/{self.run_name}",
-                    {"Train": epoch_train_loss, "Valid": epoch_valid_loss},
-                    epoch,
+                # Group all runs into single 'Loss/Train' and 'Loss/Validation' plots
+                self.writer.add_scalar(
+                    "Loss/Train", epoch_train_loss, epoch, display_name=self.run_name
+                )
+                self.writer.add_scalar(
+                    "Loss/Validation", epoch_valid_loss, epoch, display_name=self.run_name
                 )
 
             # --- Model Checkpointing ---
@@ -133,7 +134,7 @@ class Solver:
 
         final_train_loss = float(training_loss[-1])
 
-        # --- TensorBoard HParams Logging (End of Run) ---
+        # --- TensorBoard HParams Logging ---
         if self.writer and self.hparams:
             self.writer.add_hparams(
                 hparam_dict=self.hparams,
