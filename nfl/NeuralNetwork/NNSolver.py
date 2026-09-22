@@ -107,13 +107,10 @@ class Solver:
 
             # --- Unified TensorBoard Logging ---
             if self.writer:
-                # Group all runs into single 'Loss/Train' and 'Loss/Validation' plots
-                self.writer.add_scalar(
-                    "Loss/Train", epoch_train_loss, epoch, display_name=self.run_name
-                )
-                self.writer.add_scalar(
-                    "Loss/Validation", epoch_valid_loss, epoch, display_name=self.run_name
-                )
+                # Graphs all runs on one plot for 'Loss/Train'
+                self.writer.add_scalars("Loss/Train", {self.run_name: epoch_train_loss}, epoch)
+                # Graphs all runs on one plot for 'Loss/Validation'
+                self.writer.add_scalars("Loss/Validation", {self.run_name: epoch_valid_loss}, epoch)
 
             # --- Model Checkpointing ---
             if epoch_valid_loss < best_valid_loss:

@@ -19,12 +19,6 @@ class BaseSearch:
         eps: float = 1e-8,
         log_dir: str = "runs/hyperparameter_search",
     ):
-        """
-        Base Hyperparameter Optimizer.
-        
-        param_grid requires lists for keys:
-          'batch_size', 'lr', 'num_hidden_layers', 'hidden_size', 'weight_decay'
-        """
         self.param_grid = param_grid
         self.solver_cls = solver_cls
         self.model_cls = model_cls
@@ -35,11 +29,11 @@ class BaseSearch:
         self.betas = betas
         self.eps = eps
         self.log_dir = log_dir
+        
+        # Single writer instance across all hyperparameter runs
+        self.writer = SummaryWriter(log_dir=self.log_dir)
 
     def _evaluate_config(self, params: dict, X_tr, y_tr, X_v, y_v, run_name: str) -> dict:
-        """Helper to instantiate the model, optimizer, writer, and run Solver."""
-        writer = SummaryWriter(log_dir=f"{self.log_dir}/{run_name}")
-
         model = self.model_cls(
             input_size=self.input_size,
             num_hidden_layers=int(params["num_hidden_layers"]),
@@ -54,7 +48,6 @@ class BaseSearch:
             weight_decay=float(params["weight_decay"]),
         )
 
-        # Cast int params to avoid scalar numpy type bugs
         hparams = {
             "batch_size": int(params["batch_size"]),
             "lr": float(params["lr"]),
@@ -70,15 +63,19 @@ class BaseSearch:
             batch_size=hparams["batch_size"],
             optimizer=optimizer,
             criterion=self.criterion,
-            writer=writer,
+            writer=self.writer,  # Shared writer
             run_name=run_name,
             hparams=hparams,
         )
 
         metrics = solver.train(X_tr, y_tr, X_v, y_v, modelName=run_name, saveBest=True)
-        writer.close()
 
         return {"run_name": run_name, **hparams, **metrics}
+
+    def close(self):
+        """Call at the end of search to release writer resources."""
+        if hasattr(self, "writer") and self.writer:
+            self.writer.close()
 
 
 class GridSearch(BaseSearch):
