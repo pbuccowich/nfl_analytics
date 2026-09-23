@@ -112,7 +112,7 @@ class Solver:
                 import optuna
                 self.optuna_trial.report(epoch_valid_loss, epoch)
                 if self.optuna_trial.should_prune():
-                    raise optuna.Exceptions.TrialPruned()
+                    raise optuna.exceptions.TrialPruned()
 
             # --- Unified TensorBoard Logging ---
             if self.writer:
