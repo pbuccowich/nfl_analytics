@@ -1,8 +1,7 @@
 import numpy as np
 import torch
-import torch.nn as nn
 from sklearn.model_selection import KFold, train_test_split
-from nfl.NeuralNetwork.EnsembleModel import EnsembleModel
+from core.trainer.ensemble import EnsembleModel
 import optuna
 from torch.utils.tensorboard import SummaryWriter
 
