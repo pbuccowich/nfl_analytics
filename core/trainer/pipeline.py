@@ -191,8 +191,7 @@ class PipelineDriver:
             models.append(solver.bestModel if solver.bestModel else model)
 
         ensemble = EnsembleModel(models)
-
         if save_path:
-            torch.save(ensemble.state_dict(), save_path)
+            ensemble.save(save_path)
 
         return ensemble
