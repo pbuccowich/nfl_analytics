@@ -1,8 +1,8 @@
 from torch import nn
 
-class EPAPredictor(nn.Module):
+class WPAPredictor(nn.Module):
     def __init__(self, input_size, hidden_size: int = 64, num_hidden_layers: int = 1):
-        super(EPAPredictor, self).__init__()
+        super(WPAPredictor, self).__init__()
         self.layers = nn.ModuleList()
         self.layers.append(nn.Linear(input_size, hidden_size))
         self.layers.append(nn.LeakyReLU())

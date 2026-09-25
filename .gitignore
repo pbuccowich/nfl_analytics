@@ -4,4 +4,5 @@ schema.json
 *.egg-info/
 *.pyc
 runs/*
-nfl/NeuralNetwork/*.pth
+nfl/NeuralNetwork/*.
+*.pth
