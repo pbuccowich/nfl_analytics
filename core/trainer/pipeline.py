@@ -190,7 +190,7 @@ class PipelineDriver:
 
             models.append(solver.bestModel if solver.bestModel else model)
 
-        ensemble = EnsembleModel(models)
+        ensemble = EnsembleModel(models, config = self.best_params)
         if save_path:
             ensemble.save(save_path)
 
