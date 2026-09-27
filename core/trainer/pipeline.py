@@ -75,32 +75,30 @@ class PipelineDriver:
         self,
         X: torch.Tensor,
         y: torch.Tensor,
-        param_grid: dict,
+        param_space: dict,
         n_trials: int = 30,
         holdout_ratio: float = 0.15,
     ) -> dict:
         X_search, X_holdout, y_search, y_holdout = train_test_split(
-            X.cpu().numpy(), y.cpu().numpy(), test_size=holdout_ratio, random_state=42
+            X, y, test_size=holdout_ratio, random_state=42
         )
-        X_search_t, y_search_t = torch.tensor(X_search), torch.tensor(y_search)
-        X_holdout_t, y_holdout_t = torch.tensor(X_holdout).to(self.device), torch.tensor(y_holdout).to(self.device)
+        X_holdout_dev, y_holdout_dev = X_holdout.to(self.device), y_holdout.to(self.device)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-        def objective(trial):
+        def objective(trial: optuna.Trial) -> float:
             hparams = {}
-            for k, v in param_grid.items():
-                if isinstance(v, tuple) and len(v) == 2:
-                    use_log = isinstance(v[0], float) and v[0] > 0 and (v[1] / v[0] >= 100)
-                    hparams[k] = (
-                        trial.suggest_float(k, v[0], v[1], log=use_log)
-                        if isinstance(v[0], float)
-                        else trial.suggest_int(k, v[0], v[1])
-                    )
-                else:
-                    hparams[k] = trial.suggest_categorical(k, v)
+            for k, (low, high, distribution) in param_space.items():
+                if distribution == "int":
+                    hparams[k] = trial.suggest_int(k, low, high)
+                elif distribution == "float":
+                    hparams[k] = trial.suggest_float(k, low, high)
+                elif distribution == "log":
+                    hparams[k] = trial.suggest_float(k, low, high, log=True)
+                elif distribution == "categorical":
+                    hparams[k] = trial.suggest_categorical(k, low)  # low contains choices list
 
-            return self._evaluate_kfolds(X_search_t, y_search_t, hparams, trial=trial)
+            return self._evaluate_kfolds(X_search, y_search, hparams, trial=trial)
 
         study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler())
         study.optimize(objective, n_trials=n_trials)
@@ -130,12 +128,12 @@ class PipelineDriver:
             criterion=self.criterion,
         )
 
-        solver.train(X_search_t, y_search_t, X_holdout_t, y_holdout_t, saveBest=True)
+        solver.train(X_search, y_search, X_holdout_dev, y_holdout_dev, saveBest=True)
 
         temp_model.eval()
         with torch.no_grad():
-            preds = temp_model(X_holdout_t)
-            holdout_loss = self.criterion(preds, y_holdout_t.view(-1, 1)).item()
+            preds = temp_model(X_holdout_dev)
+            holdout_loss = self.criterion(preds, y_holdout_dev.view(-1, 1)).item()
 
         delta = (holdout_loss - self.best_cv_loss) / self.best_cv_loss
 
@@ -190,7 +188,11 @@ class PipelineDriver:
 
             models.append(solver.bestModel if solver.bestModel else model)
 
-        ensemble = EnsembleModel(models, config = self.best_params)
+        best_config = {
+            "input_size": X.shape[1],
+            **self.best_params,
+        }
+        ensemble = EnsembleModel(models, config=best_config)
         if save_path:
             ensemble.save(save_path)
 

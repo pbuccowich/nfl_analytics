@@ -73,21 +73,15 @@ def _get_parameter_grid():
     MIN_BATCH_SIZE, MAX_BATCH_SIZE = 64, 512
     MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY = 1e-5, 1e-2
 
-    BATCH_SIZE = np.linspace(MIN_BATCH_SIZE, MAX_BATCH_SIZE, num=NUM_ITER).astype(int).tolist()
-    LEARNING_RATE = np.geomspace(MIN_LEARNING_RATE, MAX_LEARNING_RATE, num=NUM_ITER).tolist()
-    NUM_HIDDEN_LAYERS = np.linspace(MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS, num=NUM_ITER).astype(int).tolist()
-    HIDDEN_SIZE = np.linspace(MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE, num=NUM_ITER).astype(int).tolist()
-    WEIGHT_DECAY = np.geomspace(MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY, num=NUM_ITER).tolist()
-
-    param_grid = {
-        "batch_size": BATCH_SIZE,
-        "lr": LEARNING_RATE,
-        "num_hidden_layers": NUM_HIDDEN_LAYERS,
-        "hidden_size": HIDDEN_SIZE,
-        "weight_decay": WEIGHT_DECAY,
+    param_space = {
+        "batch_size": (MIN_BATCH_SIZE, MAX_BATCH_SIZE, "int"),
+        "lr": (MIN_LEARNING_RATE, MAX_LEARNING_RATE, "log"),
+        "num_hidden_layers": (MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS, "int"),
+        "hidden_size": (MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE, "int"),
+        "weight_decay": (MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY, "log"),
     }
 
-    return param_grid
+    return param_space
 
 def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5):
     data = DataManager.get_data(path_to_json = (Path.cwd() / "nfl/data").resolve())

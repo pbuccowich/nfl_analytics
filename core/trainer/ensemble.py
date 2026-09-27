@@ -1,7 +1,7 @@
 from pathlib import Path
 import torch
 import torch.nn as nn
-
+import inspect
 
 class EnsembleModel(nn.Module):
 
@@ -42,10 +42,6 @@ class EnsembleModel(nn.Module):
         model_cls: type[nn.Module],
         map_location: str | torch.device | None = None,
     ) -> "EnsembleModel":
-        """Reconstructs the ensemble automatically using saved config and model
-
-        class.
-        """
         checkpoint = torch.load(
             filepath, map_location=map_location, weights_only=False
         )
@@ -53,8 +49,12 @@ class EnsembleModel(nn.Module):
         config = checkpoint.get("config", {})
         num_models = checkpoint.get("num_models", len(checkpoint["state_dict"]))
 
-        # Reconstruct base model instances automatically using saved config
-        base_models = [model_cls(**config) for _ in range(num_models)]
+        # Filter config keys so only valid WPAPredictor args are passed
+        valid_args = inspect.signature(model_cls.__init__).parameters
+        model_kwargs = {k: v for k, v in config.items() if k in valid_args}
+
+        # Reconstruct base models safely
+        base_models = [model_cls(**model_kwargs) for _ in range(num_models)]
 
         ensemble = cls(base_models, config=config)
         ensemble.load_state_dict(checkpoint["state_dict"])
