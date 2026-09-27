@@ -111,7 +111,7 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5):
     best_hparams = pipeline.select_parameters(
         X=X_train,
         y=y_train,
-        param_grid=param_grid,
+        param_space=param_grid,
         n_trials=30,
     )
 
