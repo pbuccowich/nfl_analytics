@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from pathlib import Path
-from nfl.data_management import nfl_enums as enums
+from nfl.lib import nfl_enums as enums
 from nfl.data_management.data_manager import DataManager
 from nfl.models.wpa_predictor import WPAPredictor
 from core.trainer.solver import Solver
