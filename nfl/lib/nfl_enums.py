@@ -1,4 +1,6 @@
-from enum import StrEnum
+from enum import Enum, StrEnum
+
+from pydantic.dataclasses import dataclass
 
 class NFLTeam(StrEnum):
     PHI = "PHI"
@@ -58,15 +60,41 @@ class SeasonType(StrEnum):
     REGULAR = "REG"
     POSTSEASON = "POST"
 
-class PenaltyType(StrEnum):
-    FALSE_START = "False Start"
-    UNNECESSARY_ROUGHNESS = "Unnecessary Roughness"
-    ROUGHING_THE_PASSER = "Roughing the Passer"
-    OFFENSIVE_HOLDING = "Offensive Holding"
-    DEFENSIVE_OFFSIDE = "Defensive Offside"
-    ILLEGAL_FORMATION = "Illegal Formation"
-    ILLEGAL_CONTACT = "Illegal Contact"
-    ENCROACHMENT = "Encroachment"
+@dataclass(frozen=True)
+class PenaltySpec:
+    name: str
+    penalty_distance: int | None
+    on_offense: bool
+    on_defense: bool
+    assessed_after_play: bool
+    automatic_first_down: bool | None = None
+
+@dataclass(frozen=True)
+class Defensive_PenaltySpec(PenaltySpec):
+    automatic_first_down: bool = False
+    on_offense: bool = False
+    on_defense: bool = True
+
+@dataclass(frozen=True)
+class Offensive_PenaltySpec(PenaltySpec):
+    on_offense: bool = True
+    on_defense: bool = False
+    loss_of_down: bool = False
+
+@dataclass(frozen=True)
+class Personal_FoulSpec(PenaltySpec):
+    penalty_distance: int = 15
+    assessed_after_play: bool = True
+
+class PenaltyType(Enum):
+    FALSE_START = Offensive_PenaltySpec(name="False Start", penalty_distance=5, assessed_after_play=False)
+    UNNECESSARY_ROUGHNESS = Personal_FoulSpec(name="Unnecessary Roughness", on_offense = True, on_defense = True, automatic_first_down=False)
+    ROUGHING_THE_PASSER = Personal_FoulSpec(name="Roughing the Passer", on_offense=False, on_defense=True, automatic_first_down=True)
+    OFFENSIVE_HOLDING = Offensive_PenaltySpec(name="Offensive Holding", penalty_distance=10, assessed_after_play=False, loss_of_down=False)
+    DEFENSIVE_OFFSIDE = Defensive_PenaltySpec(name="Defensive Offside", penalty_distance=5, assessed_after_play=False, automatic_first_down=False)
+    ILLEGAL_FORMATION = PenaltySpec(name="Illegal Formation", penalty_distance=5, on_offense=True, on_defense=True, assessed_after_play=False)
+    ILLEGAL_CONTACT = Defensive_PenaltySpec(name="Illegal Contact", penalty_distance=5, assessed_after_play=False, automatic_first_down=True)
+    ENCROACHMENT = Defensive_PenaltySpec(name="Encroachment", penalty_distance=5, assessed_after_play=False)
     DELAY_OF_GAME = "Delay of Game"
     FAIR_CATCH_INTERFERENCE = "Fair Catch Interference"
     DEFENSIVE_HOLDING = "Defensive Holding"

@@ -15,7 +15,7 @@ class PlaySimulator:
             penalty_distance = random.choice([5,10,15])
             return [Penalty(penalty_type=penalty_type,
                             penalty_yards=penalty_distance,
-                            penalty_on_offence=False,
+                            penalty_on_offense=False,
                             assessed_after_play=False)]
         return None
         

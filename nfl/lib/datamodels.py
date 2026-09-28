@@ -6,7 +6,8 @@ import torch
 class Penalty:
     penalty_type: PenaltyType
     penalty_yards: int
-    penalty_on_offence: bool
+    penalty_on_offense: bool
+    assessed_after_play: bool
 
 
 @dataclass
