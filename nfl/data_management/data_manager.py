@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
-from nfl.data_management import nfl_enums as enums
+from nfl.lib import nfl_enums as enums
 
 ENUM_MAP = {
     "home_team": enums.NFLTeam,

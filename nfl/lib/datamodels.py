@@ -1,14 +1,30 @@
 from dataclasses import dataclass
-from nfl.lib.nfl_enums import PenaltyType
 import torch
 
-@dataclass
-class Penalty:
-    penalty_type: PenaltyType
-    penalty_yards: int
-    penalty_on_offense: bool
+@dataclass(frozen=True)
+class PenaltySpec:
+    name: str
+    penalty_distance: int | None
+    on_offense: bool
+    on_defense: bool
     assessed_after_play: bool
+    loss_of_down: bool = False
+    automatic_first_down: bool = False
 
+@dataclass(frozen=True)
+class Defensive_PenaltySpec(PenaltySpec):
+    on_offense: bool = False
+    on_defense: bool = True
+
+@dataclass(frozen=True)
+class Offensive_PenaltySpec(PenaltySpec):
+    on_offense: bool = True
+    on_defense: bool = False
+
+@dataclass(frozen=True)
+class Personal_FoulSpec(PenaltySpec):
+    penalty_distance: int = 15
+    assessed_after_play: bool = True
 
 @dataclass
 class Scenario:
