@@ -60,6 +60,9 @@ class SeasonType(StrEnum):
     REGULAR = "REG"
     POSTSEASON = "POST"
 
+from enum import Enum
+from dataclasses import dataclass
+
 @dataclass(frozen=True)
 class PenaltySpec:
     name: str
@@ -67,11 +70,11 @@ class PenaltySpec:
     on_offense: bool
     on_defense: bool
     assessed_after_play: bool
-    automatic_first_down: bool | None = None
+    loss_of_down: bool = False
+    automatic_first_down: bool = False
 
 @dataclass(frozen=True)
 class Defensive_PenaltySpec(PenaltySpec):
-    automatic_first_down: bool = False
     on_offense: bool = False
     on_defense: bool = True
 
@@ -79,87 +82,461 @@ class Defensive_PenaltySpec(PenaltySpec):
 class Offensive_PenaltySpec(PenaltySpec):
     on_offense: bool = True
     on_defense: bool = False
-    loss_of_down: bool = False
 
 @dataclass(frozen=True)
 class Personal_FoulSpec(PenaltySpec):
     penalty_distance: int = 15
     assessed_after_play: bool = True
 
+
 class PenaltyType(Enum):
-    FALSE_START = Offensive_PenaltySpec(name="False Start", penalty_distance=5, assessed_after_play=False)
-    UNNECESSARY_ROUGHNESS = Personal_FoulSpec(name="Unnecessary Roughness", on_offense = True, on_defense = True, automatic_first_down=False)
-    ROUGHING_THE_PASSER = Personal_FoulSpec(name="Roughing the Passer", on_offense=False, on_defense=True, automatic_first_down=True)
-    OFFENSIVE_HOLDING = Offensive_PenaltySpec(name="Offensive Holding", penalty_distance=10, assessed_after_play=False, loss_of_down=False)
-    DEFENSIVE_OFFSIDE = Defensive_PenaltySpec(name="Defensive Offside", penalty_distance=5, assessed_after_play=False, automatic_first_down=False)
-    ILLEGAL_FORMATION = PenaltySpec(name="Illegal Formation", penalty_distance=5, on_offense=True, on_defense=True, assessed_after_play=False)
-    ILLEGAL_CONTACT = Defensive_PenaltySpec(name="Illegal Contact", penalty_distance=5, assessed_after_play=False, automatic_first_down=True)
-    ENCROACHMENT = Defensive_PenaltySpec(name="Encroachment", penalty_distance=5, assessed_after_play=False)
-    DELAY_OF_GAME = "Delay of Game"
-    FAIR_CATCH_INTERFERENCE = "Fair Catch Interference"
-    DEFENSIVE_HOLDING = "Defensive Holding"
-    ILLEGAL_MOTION = "Illegal Motion"
-    UNSPORTSMANLIKE_CONDUCT = "Unsportsmanlike Conduct"
-    OFFENSIVE_PASS_INTERFERENCE = "Offensive Pass Interference"
-    ILLEGAL_BLOCK_ABOVE_THE_WAIST = "Illegal Block Above the Waist"
-    DEFENSIVE_PASS_INTERFERENCE = "Defensive Pass Interference"
-    FACE_MASK = "Face Mask"
-    TRIPPING = "Tripping"
-    ILLEGAL_SHIFT = "Illegal Shift"
-    INELIGIBLE_DOWNFIELD_PASS = "Ineligible Downfield Pass"
-    ILLEGAL_SUBSTITUTION = "Illegal Substitution"
-    FACE_MASK_5_YARDS = "Face Mask (5 Yards)"
-    INTENTIONAL_GROUNDING = "Intentional Grounding"
-    DEFENSIVE_12_ON_FIELD = "Defensive 12 On-field"
-    ILLEGAL_USE_OF_HANDS = "Illegal Use of Hands"
-    INELIGIBLE_DOWNFIELD_KICK = "Ineligible Downfield Kick"
-    KICKOFF_OUT_OF_BOUNDS = "Kickoff Out of Bounds"
-    CLIPPING = "Clipping"
-    ILLEGAL_FORWARD_PASS = "Illegal Forward Pass"
-    OFFENSIVE_12_ON_FIELD = "Offensive 12 On-field"
-    ILLEGAL_TOUCH_KICK = "Illegal Touch Kick"
-    NEUTRAL_ZONE_INFRACTION = "Neutral Zone Infraction"
-    TAUNTING = "Taunting"
-    RUNNING_INTO_THE_KICKER = "Running Into the Kicker"
-    DISQUALIFICATION = "Disqualification"
-    OFFENSIVE_OFFSIDE = "Offensive Offside"
-    ROUGHING_THE_KICKER = "Roughing the Kicker"
-    OFFSIDE_ON_FREE_KICK = "Offside on Free Kick"
-    DEFENSIVE_DELAY_OF_GAME = "Defensive Delay of Game"
-    CHOP_BLOCK = "Chop Block"
-    PERSONAL_FOUL = "Personal Foul"
-    ILLEGAL_CUT = "Illegal Cut"
-    ILLEGAL_CRACKBACK = "Illegal Crackback"
-    ILLEGAL_TOUCH_PASS = "Illegal Touch Pass"
-    ILLEGAL_BLINDSIDE_BLOCK = "Illegal Blindside Block"
-    SHORT_FREE_KICK = "Short Free Kick"
-    LEVERAGE = "Leverage"
-    ILLEGALLY_KICKING_BALL = "Illegally Kicking Ball"
-    DELAY_OF_KICKOFF = "Delay of Kickoff"
-    INVALID_FAIR_CATCH_SIGNAL = "Invalid Fair Catch Signal"
-    LEAPING = "Leaping"
-    LOW_BLOCK = "Low Block"
-    INTERFERENCE_WITH_OPPORTUNITY_TO_CATCH = "Interference with Opportunity to Catch"
-    LOWERING_THE_HEAD_TO_MAKE_FORCIBLE_CONTACT = "Lowering the Head to Make Forcible Contact"
-    DEFENSIVE_TOO_MANY_MEN_ON_FIELD = "Defensive Too Many Men on Field"
-    PLAYER_OUT_OF_BOUNDS_ON_KICK = "Player Out of Bounds on Kick"
-    HORSE_COLLAR_TACKLE = "Horse Collar Tackle"
-    ILLEGAL_PEELBACK = "Illegal Peelback"
-    OFFENSIVE_TOO_MANY_MEN_ON_FIELD = "Offensive Too Many Men on Field"
-    KICK_CATCH_INTERFERENCE = "Kick Catch Interference"
-    ILLEGAL_DOUBLE_TEAM_BLOCK = "Illegal Double-Team Block"
-    ILLEGAL_KICK_KICKING_LOOSE_BALL = "Illegal Kick/Kicking Loose Ball"
-    ILLEGAL_BAT = "Illegal Bat"
-    LOWERING_THE_HEAD_TO_INITIATE_CONTACT = "Lowering the Head to Initiate Contact"
-    ILLEGAL_WEDGE = "Illegal Wedge"
-    KICKOFF_SHORT_OF_LANDING_ZONE = "Kickoff Short of Landing Zone"
-    HIP_DROP_TACKLE = "Hip Drop Tackle"
-    ILLEGAL_SCRIMMAGE_KICK = "Illegal Scrimmage Kick"
-    ILLEGAL_KICK = "Illegal Kick"
-    PLAYER_OUT_OF_BOUNDS_ON_PUNT = "Player Out of Bounds on Punt"
-    ILLGEAL_PROCEDURE = "Illegal Procedure"
-    ILLEGAL_RECIEVER_PASS = "Illegal Receiver Pass"
-    HORSE_COLLAR = "Horse Collar"
+    FALSE_START = Offensive_PenaltySpec(
+        name="False Start", penalty_distance=5, assessed_after_play=False
+    )
+    UNNECESSARY_ROUGHNESS = Personal_FoulSpec(
+        name="Unnecessary Roughness",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    ROUGHING_THE_PASSER = Personal_FoulSpec(
+        name="Roughing the Passer",
+        on_offense=False,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    OFFENSIVE_HOLDING = Offensive_PenaltySpec(
+        name="Offensive Holding", penalty_distance=10, assessed_after_play=False
+    )
+    DEFENSIVE_OFFSIDE = Defensive_PenaltySpec(
+        name="Defensive Offside", penalty_distance=5, assessed_after_play=False
+    )
+    ILLEGAL_FORMATION = PenaltySpec(
+        name="Illegal Formation",
+        penalty_distance=5,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    ILLEGAL_CONTACT = Defensive_PenaltySpec(
+        name="Illegal Contact", penalty_distance=5, assessed_after_play=False, automatic_first_down=True
+    )
+    ENCROACHMENT = Defensive_PenaltySpec(
+        name="Encroachment", penalty_distance=5, assessed_after_play=False
+    )
+    DELAY_OF_GAME = PenaltySpec(
+        name="Delay of Game",
+        penalty_distance=5,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    FAIR_CATCH_INTERFERENCE = Defensive_PenaltySpec(
+        name="Fair Catch Interference", penalty_distance=15, assessed_after_play=False
+    )
+    DEFENSIVE_HOLDING = Defensive_PenaltySpec(
+        name="Defensive Holding", penalty_distance=5, assessed_after_play=False, automatic_first_down=True
+    )
+    ILLEGAL_MOTION = Offensive_PenaltySpec(
+        name="Illegal Motion", penalty_distance=5, assessed_after_play=False
+    )
+    UNSPORTSMANLIKE_CONDUCT = Personal_FoulSpec(
+        name="Unsportsmanlike Conduct",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    OFFENSIVE_PASS_INTERFERENCE = Offensive_PenaltySpec(
+        name="Offensive Pass Interference",
+        penalty_distance=10,
+        assessed_after_play=False,
+        loss_of_down=False,
+    )
+    ILLEGAL_BLOCK_ABOVE_THE_WAIST = PenaltySpec(
+        name="Illegal Block Above the Waist",
+        penalty_distance=10,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    DEFENSIVE_PASS_INTERFERENCE = Defensive_PenaltySpec(
+        name="Defensive Pass Interference",
+        penalty_distance=None,  # Spot foul
+        assessed_after_play=False,
+        automatic_first_down=True,
+    )
+    FACE_MASK = Personal_FoulSpec(
+        name="Face Mask",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    TRIPPING = PenaltySpec(
+        name="Tripping",
+        penalty_distance=15,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+        automatic_first_down=True,  # Automatic 1st down if committed by defense
+    )
+    ILLEGAL_SHIFT = Offensive_PenaltySpec(
+        name="Illegal Shift",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    INELIGIBLE_DOWNFIELD_PASS = Offensive_PenaltySpec(
+        name="Ineligible Downfield Pass",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    ILLEGAL_SUBSTITUTION = PenaltySpec(
+        name="Illegal Substitution",
+        penalty_distance=5,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    FACE_MASK_5_YARDS = PenaltySpec(
+        name="Face Mask (5 Yards)",
+        penalty_distance=5,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+        automatic_first_down=True,  # Historical/college rule variant
+    )
+    INTENTIONAL_GROUNDING = Offensive_PenaltySpec(
+        name="Intentional Grounding",
+        penalty_distance=10,  # Or spot of foul if >10 yards behind LOS
+        assessed_after_play=False,
+        loss_of_down=True,
+    )
+    DEFENSIVE_12_ON_FIELD = Defensive_PenaltySpec(
+        name="Defensive 12 On-field",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    ILLEGAL_USE_OF_HANDS = PenaltySpec(
+        name="Illegal Use of Hands",
+        penalty_distance=10,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+        automatic_first_down=True,  # If committed by defense
+    )
+    INELIGIBLE_DOWNFIELD_KICK = PenaltySpec(
+        name="Ineligible Downfield Kick",
+        penalty_distance=5,
+        on_offense=True,  # Kicking team
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    KICKOFF_OUT_OF_BOUNDS = PenaltySpec(
+        name="Kickoff Out of Bounds",
+        penalty_distance=25,  # Placed at 40-yard line (25 yards from kickoff spot)
+        on_offense=True,  # Kicking team
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    CLIPPING = PenaltySpec(
+        name="Clipping",
+        penalty_distance=15,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+        automatic_first_down=True,  # If committed by defense
+    )
+    ILLEGAL_FORWARD_PASS = Offensive_PenaltySpec(
+        name="Illegal Forward Pass",
+        penalty_distance=5,
+        assessed_after_play=False,
+        loss_of_down=True,
+    )
+    OFFENSIVE_12_ON_FIELD = Offensive_PenaltySpec(
+        name="Offensive 12 On-field",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    ILLEGAL_TOUCH_KICK = PenaltySpec(
+        name="Illegal Touch Kick",
+        penalty_distance=0,  # Violation/spot of touch rather than yardage distance
+        on_offense=True,  # Kicking team
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    NEUTRAL_ZONE_INFRACTION = Defensive_PenaltySpec(
+        name="Neutral Zone Infraction",
+        penalty_distance=5,
+        assessed_after_play=False,  # Dead-ball foul before the snap
+    )
+    TAUNTING = Personal_FoulSpec(
+        name="Taunting",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    RUNNING_INTO_THE_KICKER = Defensive_PenaltySpec(
+        name="Running Into the Kicker",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    DISQUALIFICATION = Personal_FoulSpec(
+        name="Disqualification",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    OFFENSIVE_OFFSIDE = Offensive_PenaltySpec(
+        name="Offensive Offside",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    ROUGHING_THE_KICKER = Defensive_PenaltySpec(
+        name="Roughing the Kicker",
+        penalty_distance=15,
+        assessed_after_play=False,
+        automatic_first_down=True,
+    )
+    OFFSIDE_ON_FREE_KICK = PenaltySpec(
+        name="Offside on Free Kick",
+        penalty_distance=5,
+        on_offense=True,  # Kicking team
+        on_defense=True,  # Receiving team
+        assessed_after_play=False,
+    )
+    DEFENSIVE_DELAY_OF_GAME = Defensive_PenaltySpec(
+        name="Defensive Delay of Game",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    CHOP_BLOCK = PenaltySpec(
+        name="Chop Block",
+        penalty_distance=15,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+        automatic_first_down=True,  # If committed by defense
+    )
+    PERSONAL_FOUL = Personal_FoulSpec(
+        name="Personal Foul",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    ILLEGAL_CUT = PenaltySpec(
+        name="Illegal Cut",
+        penalty_distance=15,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+        automatic_first_down=True,  # If committed by defense
+    )
+    ILLEGAL_CRACKBACK = PenaltySpec(
+        name="Illegal Crackback",
+        penalty_distance=15,
+        on_offense=True,
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    ILLEGAL_TOUCH_PASS = Offensive_PenaltySpec(
+        name="Illegal Touch Pass",
+        penalty_distance=5,
+        assessed_after_play=False,
+        loss_of_down=True,
+    )
+    ILLEGAL_BLINDSIDE_BLOCK = PenaltySpec(
+        name="Illegal Blindside Block",
+        penalty_distance=15,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+        automatic_first_down=True,  # If committed by defense
+    )
+    SHORT_FREE_KICK = PenaltySpec(
+        name="Short Free Kick",
+        penalty_distance=5,
+        on_offense=True,  # Kicking team
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    LEVERAGE = Defensive_PenaltySpec(
+        name="Leverage",
+        penalty_distance=15,
+        assessed_after_play=False,
+        automatic_first_down=True,
+    )
+    ILLEGALLY_KICKING_BALL = PenaltySpec(
+        name="Illegally Kicking Ball",
+        penalty_distance=10,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    DELAY_OF_KICKOFF = PenaltySpec(
+        name="Delay of Kickoff",
+        penalty_distance=5,
+        on_offense=True,  # Kicking team
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    INVALID_FAIR_CATCH_SIGNAL = PenaltySpec(
+        name="Invalid Fair Catch Signal",
+        penalty_distance=5,
+        on_offense=False,
+        on_defense=True,  # Receiving team making the signal
+        assessed_after_play=False,
+    )
+    LEAPING = Defensive_PenaltySpec(
+        name="Leaping",
+        penalty_distance=15,
+        assessed_after_play=False,
+        automatic_first_down=True,
+    )
+    LOW_BLOCK = PenaltySpec(
+        name="Low Block",
+        penalty_distance=15,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+        automatic_first_down=True,  # If committed by defense
+    )
+    INTERFERENCE_WITH_OPPORTUNITY_TO_CATCH = PenaltySpec(
+        name="Interference with Opportunity to Catch",
+        penalty_distance=15,
+        on_offense=True,  # Kicking team
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    LOWERING_THE_HEAD_TO_MAKE_FORCIBLE_CONTACT = Personal_FoulSpec(
+        name="Lowering the Head to Make Forcible Contact",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    DEFENSIVE_TOO_MANY_MEN_ON_FIELD = Defensive_PenaltySpec(
+        name="Defensive Too Many Men on Field",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    PLAYER_OUT_OF_BOUNDS_ON_KICK = PenaltySpec(
+        name="Player Out of Bounds on Kick",
+        penalty_distance=5,
+        on_offense=True,  # Kicking team player stepping out voluntarily
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    HORSE_COLLAR_TACKLE = Personal_FoulSpec(
+        name="Horse Collar Tackle",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    ILLEGAL_PEELBACK = PenaltySpec(
+        name="Illegal Peelback",
+        penalty_distance=15,
+        on_offense=True,
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    OFFENSIVE_TOO_MANY_MEN_ON_FIELD = Offensive_PenaltySpec(
+        name="Offensive Too Many Men on Field",
+        penalty_distance=5,
+        assessed_after_play=False,
+    )
+    KICK_CATCH_INTERFERENCE = PenaltySpec(
+        name="Kick Catch Interference",
+        penalty_distance=15,
+        on_offense=True,  # Kicking team
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    ILLEGAL_DOUBLE_TEAM_BLOCK = PenaltySpec(
+        name="Illegal Double-Team Block",
+        penalty_distance=15,
+        on_offense=True,  # Receiving team on kickoffs
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    ILLEGAL_KICK_KICKING_LOOSE_BALL = PenaltySpec(
+        name="Illegal Kick/Kicking Loose Ball",
+        penalty_distance=10,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    ILLEGAL_BAT = PenaltySpec(
+        name="Illegal Bat",
+        penalty_distance=10,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    LOWERING_THE_HEAD_TO_INITIATE_CONTACT = Personal_FoulSpec(
+        name="Lowering the Head to Initiate Contact",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    ILLEGAL_WEDGE = PenaltySpec(
+        name="Illegal Wedge",
+        penalty_distance=15,
+        on_offense=True,  # Receiving team on kickoffs
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    KICKOFF_SHORT_OF_LANDING_ZONE = PenaltySpec(
+        name="Kickoff Short of Landing Zone",
+        penalty_distance=None,  # Treated as kickoff out of bounds (ball placed at the 40-yard line)
+        on_offense=True,  # Kicking team
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    HIP_DROP_TACKLE = Personal_FoulSpec(
+        name="Hip Drop Tackle",
+        on_offense=False,
+        on_defense=True,
+        automatic_first_down=True,
+    )
+    ILLEGAL_SCRIMMAGE_KICK = PenaltySpec(
+        name="Illegal Scrimmage Kick",
+        penalty_distance=5,
+        on_offense=True,
+        on_defense=False,
+        assessed_after_play=False,
+        loss_of_down=True,
+    )
+    ILLEGAL_KICK = PenaltySpec(
+        name="Illegal Kick",
+        penalty_distance=10,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    PLAYER_OUT_OF_BOUNDS_ON_PUNT = PenaltySpec(
+        name="Player Out of Bounds on Punt",
+        penalty_distance=5,
+        on_offense=True,  # Kicking team gunner/player going out voluntarily
+        on_defense=False,
+        assessed_after_play=False,
+    )
+    ILLGEAL_PROCEDURE = PenaltySpec(
+        name="Illegal Procedure",
+        penalty_distance=5,
+        on_offense=True,
+        on_defense=True,
+        assessed_after_play=False,
+    )
+    ILLEGAL_RECIEVER_PASS = Offensive_PenaltySpec(
+        name="Illegal Receiver Pass",
+        penalty_distance=5,
+        assessed_after_play=False,
+        loss_of_down=True,  # Ineligible player touching forward pass
+    )
+    HORSE_COLLAR = Personal_FoulSpec(
+        name="Horse Collar",
+        on_offense=True,
+        on_defense=True,
+        automatic_first_down=True,
+    )
 
 class SurfaceType(StrEnum):
     GRASS = "grass"
