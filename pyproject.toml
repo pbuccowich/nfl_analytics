@@ -13,6 +13,7 @@ dependencies = [
     "pyyaml",
     "tensorboard",
     "optuna",
+    "lightgbm",
 ]
 
 [project.optional-dependencies]

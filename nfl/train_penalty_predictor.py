@@ -27,7 +27,8 @@ class PenaltyPredictor:
 
     def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensures categorical columns are typed for LightGBM."""
-        X = df[self.feature_cols].copy()
+        available_columns = [col for col in self.feature_cols if col in df.columns]
+        X = df[available_columns].copy()
         for col in self.categorical_cols:
             if col in X.columns:
                 X[col] = X[col].astype("category")
