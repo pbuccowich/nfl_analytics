@@ -60,10 +60,10 @@ POSSIBLE_PENALTIES = [
     penalty for penalty in enums.PenaltyType if penalty.value.enabled
 ]
 
-PENALTY_ENUM_MAPPING = {member.name: member for member in enums.PenaltyType}
-PENALTY_ENUM_MAPPING = {
+PENALTY_ENUM_MAPPING = {member.value.name: member for member in enums.PenaltyType}
+PENALTY_ENUM_MAPPING.update({
     "Defensive 12 On-field": enums.PenaltyType.DEFENSIVE_TOO_MANY_MEN_ON_FIELD,
     "Offensive 12 On-field": enums.PenaltyType.OFFENSIVE_TOO_MANY_MEN_ON_FIELD,
     "Horse Collar": enums.PenaltyType.HORSE_COLLAR_TACKLE,
     "Face Mask (5 Yards)": enums.PenaltyType.FACE_MASK
-}
+})
