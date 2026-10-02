@@ -204,9 +204,10 @@ class DataManager:
     @classmethod
     def _cast_to_enums(cls, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        for col, enum_class in DATA_MAP.items():
+        for col, converter in DATA_MAP.items():
             if col in df.columns:
-                df[col] = df[col].map(
-                    lambda x: enum_class(x) if pd.notnull(x) else x
-                )
+                if isinstance(converter, dict):
+                    df[col] = df[col].map(converter)
+                else:
+                    df[col] = df[col].map(lambda x: converter(x) if pd.notnull(x) else x)
         return df

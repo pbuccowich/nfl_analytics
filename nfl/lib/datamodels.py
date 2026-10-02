@@ -3,11 +3,11 @@ import torch
 
 @dataclass(frozen=True)
 class PenaltySpec:
-    name: str
-    penalty_distance: int | None
-    on_offense: bool
-    on_defense: bool
-    assessed_after_play: bool
+    name: str = ""
+    penalty_distance: int | None = None
+    on_offense: bool = False
+    on_defense: bool = False
+    assessed_after_play: bool = False
     loss_of_down: bool = False
     automatic_first_down: bool = False
     enabled: bool = True
