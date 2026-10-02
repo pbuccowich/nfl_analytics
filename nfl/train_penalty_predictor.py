@@ -2,7 +2,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
-from typing import List, Dict, Any, Union, Optional
+from typing import List, Dict, Any, Optional
 
 class PenaltyPredictor:
     def __init__(
@@ -22,75 +22,66 @@ class PenaltyPredictor:
             "verbose": -1,
             "random_state": 42
         }
-        # Storage for trained LGBM models keyed by penalty name or enum
+        # Dictionary storing all N trained LightGBM models
         self.models: Dict[Any, lgb.LGBMClassifier] = {}
 
     def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Ensure categorical columns are correctly typed for LightGBM."""
+        """Ensures categorical columns are typed for LightGBM."""
         X = df[self.feature_cols].copy()
         for col in self.categorical_cols:
             if col in X.columns:
                 X[col] = X[col].astype("category")
         return X
 
-    def fit(self, df: pd.DataFrame, target_col_prefix: str = "has_") -> "PenaltyPredictor":
+    def fit(self, df: pd.DataFrame, target_prefix: str = "has_") -> "PenaltyPredictor":
         """
-        Train a binary LightGBM classifier for each penalty in POSSIBLE_PENALTIES.
-        
-        Assumes target columns in df exist as: f"{target_col_prefix}{penalty.name.lower()}"
+        Trains N binary classifiers across all possible_penalties.
+        Assumes target columns exist as f"{target_prefix}{penalty.name.lower()}"
         """
         X = self._prepare_features(df)
 
         for penalty in self.possible_penalties:
-            # Map enum or spec to target column name
-            penalty_key = penalty.name.lower()
-            target_col = f"{target_col_prefix}{penalty_key}"
-
+            target_col = f"{target_prefix}{penalty.name.lower()}"
             if target_col not in df.columns:
-                raise KeyError(f"Target column '{target_col}' not found in training DataFrame.")
+                raise KeyError(f"Expected target column '{target_col}' in DataFrame.")
 
             y = df[target_col].astype(int)
-            
-            # Handle class imbalance: penalties are rare events (~0.5% - 3%)
+
+            # Calculate class imbalance weighting
             num_pos = y.sum()
             num_neg = len(y) - num_pos
             pos_weight = (num_neg / max(num_pos, 1)) if num_pos > 0 else 1.0
-            
-            # Cap extreme scale_pos_weight to avoid over-predicting rare fouls
-            capped_weight = min(pos_weight, 10.0)
 
-            model = lgb.LGBMClassifier(
+            clf = lgb.LGBMClassifier(
                 **self.lgb_params,
-                scale_pos_weight=capped_weight
+                scale_pos_weight=min(pos_weight, 10.0) # cap extreme weights
             )
-            model.fit(X, y)
-            self.models[penalty] = model
+            clf.fit(X, y)
+            self.models[penalty] = clf
 
         return self
 
     def predict_probs(self, scenario_and_play: pd.DataFrame) -> Dict[Any, float]:
-        """Returns P(Penalty) for each modeled penalty given a single scenario + play call."""
+        """Calculates P(Penalty) for all N models given a scenario and play call."""
         X = self._prepare_features(scenario_and_play)
-        probs = {}
-        for penalty, model in self.models.items():
-            # Class 1 probability
-            probs[penalty] = float(model.predict_proba(X)[0, 1])
-        return probs
+        return {
+            penalty: float(model.predict_proba(X)[0, 1])
+            for penalty, model in self.models.items()
+        }
 
     def sample_penalties(self, scenario_and_play: pd.DataFrame) -> List[Any]:
-        """Runs Bernoulli sampling across all penalties for simulator step execution."""
+        """Bernoulli sampling across all N penalties for simulator execution."""
         probs = self.predict_probs(scenario_and_play)
-        triggered = []
-        for penalty, prob in probs.items():
-            if np.random.rand() < prob:
-                triggered.append(penalty)
-        return triggered
+        return [
+            penalty for penalty, prob in probs.items() 
+            if np.random.rand() < prob
+        ]
 
     def save(self, filepath: str) -> None:
-        """Serialize the fitted class object to disk."""
+        """Saves the predictor instance and all N trained models into ONE file."""
         joblib.dump(self, filepath)
 
     @classmethod
     def load(cls, filepath: str) -> "PenaltyPredictor":
-        """Load a pre-trained PenaltyPredictor instance from disk."""
+        """Loads the predictor instance and all N models from a single file."""
         return joblib.load(filepath)
