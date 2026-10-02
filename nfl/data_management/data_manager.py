@@ -1,11 +1,11 @@
-from collections import defaultdict
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
 from nfl.lib import nfl_enums as enums
+from nfl.lib.constants import PENALTY_ENUM_MAPPING
 
-ENUM_MAP = {
+DATA_MAP = {
     "home_team": enums.NFLTeam,
     "away_team": enums.NFLTeam,
     "season_type": enums.SeasonType,
@@ -20,7 +20,7 @@ ENUM_MAP = {
     "play_type": enums.PlayType,
     "pass_length": enums.PassType,
     "team_type": enums.TeamType,
-    "penalty_type": enums.PenaltyType,
+    "penalty_type": PENALTY_ENUM_MAPPING,
     "surface_type": enums.SurfaceType,
     "nfl_play_type": enums.NFLPlayType,
     "run_location": enums.RunLocations,
@@ -204,7 +204,7 @@ class DataManager:
     @classmethod
     def _cast_to_enums(cls, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        for col, enum_class in ENUM_MAP.items():
+        for col, enum_class in DATA_MAP.items():
             if col in df.columns:
                 df[col] = df[col].map(
                     lambda x: enum_class(x) if pd.notnull(x) else x

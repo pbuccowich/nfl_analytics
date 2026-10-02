@@ -1,72 +1,14 @@
 import torch
 import numpy as np
 from pathlib import Path
-from nfl.lib import nfl_enums as enums
 from nfl.data_management.data_manager import DataManager
 from nfl.models.wpa_predictor import WPAPredictor
 from core.trainer.solver import Solver
 from core.trainer.pipeline import PipelineDriver
 from core.utils.lib.data_handling import create_train_test_split
-
-SCENARIO_COLS = [
-    "yardline_100",
-    "game_seconds_remaining",
-    "has_turf",
-    "temp",
-    "wind",
-    "has_roof",
-    "ydstogo",
-    "goal_to_go",
-    "score_differential",
-    "down",
-    "div_game",
-    "day_of_season",
-    "series"
-]
-
-PLAY_COLS = [
-    "play_type",
-    "pass_location",
-#    "pass_length",
-#    "run_location",
-    "run_gap",
-    "shotgun",
-    "no_huddle",
-    "qb_kneel",
-    "qb_spike",
-    "qb_scramble",
-    "air_yards"
-]
-
-RESULT_COLS = [
-    "epa",  
-    "wpa",
-    "success",
-    "result",
-    "series_success",
-    "tackle_for_loss",
-    "saftey",
-    "yards_gained",
-    "touchdown",
-    "fumble",
-    "complete_pass",
-    "rushing_yards",
-    "fumble_lost",
-    "interception",
-    "sack",
-    "penalty_yards",
-]
-
-EXCLUDED_PLAY_TYPES = {
-    enums.PlayType.KICK,
-    enums.PlayType.EXTRA_POINT,
-    enums.PlayType.NO_PLAY,
-    enums.PlayType.GAME_START,
-}
+from nfl.lib.constants import EXCLUDED_PLAY_TYPES, SCENARIO_COLS, PLAY_COLS
 
 def _get_parameter_grid():
-    NUM_ITER = 7
-
     MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS = 1, 20
     MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE = 16, 256
     MIN_LEARNING_RATE, MAX_LEARNING_RATE = 1e-5, 1e-2

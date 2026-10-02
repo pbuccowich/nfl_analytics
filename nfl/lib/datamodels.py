@@ -10,6 +10,7 @@ class PenaltySpec:
     assessed_after_play: bool
     loss_of_down: bool = False
     automatic_first_down: bool = False
+    enabled: bool = True
 
 @dataclass(frozen=True)
 class Defensive_PenaltySpec(PenaltySpec):
@@ -33,10 +34,10 @@ class Scenario:
     has_turf: bool | int
     temp: float
     wind: float
-    has_roof: bool | int
-    yds_to_go: float
-    goal_to_go: bool | int
-    score_differential: float
+    hs_roof: bool | int
+    yds_to_go: bool | int
+    score_to_go: float
+    goal_differential: float
     down: int
     div_game: bool | int
     day_of_season: int

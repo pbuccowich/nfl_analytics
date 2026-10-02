@@ -94,15 +94,13 @@ class PenaltyType(Enum):
     ENCROACHMENT = Defensive_PenaltySpec(
         name="Encroachment", penalty_distance=5, assessed_after_play=False
     )
-    DELAY_OF_GAME = PenaltySpec(
+    DELAY_OF_GAME = Offensive_PenaltySpec(
         name="Delay of Game",
         penalty_distance=5,
-        on_offense=True,
-        on_defense=True,
         assessed_after_play=False,
     )
     FAIR_CATCH_INTERFERENCE = Defensive_PenaltySpec(
-        name="Fair Catch Interference", penalty_distance=15, assessed_after_play=False
+        name="Fair Catch Interference", penalty_distance=15, assessed_after_play=False, enabled = False
     )
     DEFENSIVE_HOLDING = Defensive_PenaltySpec(
         name="Defensive Holding", penalty_distance=5, assessed_after_play=False, automatic_first_down=True
@@ -166,24 +164,11 @@ class PenaltyType(Enum):
         on_defense=True,
         assessed_after_play=False,
     )
-    FACE_MASK_5_YARDS = PenaltySpec(
-        name="Face Mask (5 Yards)",
-        penalty_distance=5,
-        on_offense=True,
-        on_defense=True,
-        assessed_after_play=False,
-        automatic_first_down=True,  # Historical/college rule variant
-    )
     INTENTIONAL_GROUNDING = Offensive_PenaltySpec(
         name="Intentional Grounding",
         penalty_distance=10,  # Or spot of foul if >10 yards behind LOS
         assessed_after_play=False,
         loss_of_down=True,
-    )
-    DEFENSIVE_12_ON_FIELD = Defensive_PenaltySpec(
-        name="Defensive 12 On-field",
-        penalty_distance=5,
-        assessed_after_play=False,
     )
     ILLEGAL_USE_OF_HANDS = PenaltySpec(
         name="Illegal Use of Hands",
@@ -199,6 +184,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     KICKOFF_OUT_OF_BOUNDS = PenaltySpec(
         name="Kickoff Out of Bounds",
@@ -206,6 +192,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     CLIPPING = PenaltySpec(
         name="Clipping",
@@ -221,17 +208,13 @@ class PenaltyType(Enum):
         assessed_after_play=False,
         loss_of_down=True,
     )
-    OFFENSIVE_12_ON_FIELD = Offensive_PenaltySpec(
-        name="Offensive 12 On-field",
-        penalty_distance=5,
-        assessed_after_play=False,
-    )
     ILLEGAL_TOUCH_KICK = PenaltySpec(
         name="Illegal Touch Kick",
         penalty_distance=0,  # Violation/spot of touch rather than yardage distance
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     NEUTRAL_ZONE_INFRACTION = Defensive_PenaltySpec(
         name="Neutral Zone Infraction",
@@ -248,6 +231,7 @@ class PenaltyType(Enum):
         name="Running Into the Kicker",
         penalty_distance=5,
         assessed_after_play=False,
+        enabled=False
     )
     DISQUALIFICATION = Personal_FoulSpec(
         name="Disqualification",
@@ -265,6 +249,7 @@ class PenaltyType(Enum):
         penalty_distance=15,
         assessed_after_play=False,
         automatic_first_down=True,
+        enabled=False
     )
     OFFSIDE_ON_FREE_KICK = PenaltySpec(
         name="Offside on Free Kick",
@@ -272,6 +257,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team
         on_defense=True,  # Receiving team
         assessed_after_play=False,
+        enabled=False
     )
     DEFENSIVE_DELAY_OF_GAME = Defensive_PenaltySpec(
         name="Defensive Delay of Game",
@@ -327,12 +313,14 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     LEVERAGE = Defensive_PenaltySpec(
         name="Leverage",
         penalty_distance=15,
         assessed_after_play=False,
         automatic_first_down=True,
+        enabled=False
     )
     ILLEGALLY_KICKING_BALL = PenaltySpec(
         name="Illegally Kicking Ball",
@@ -340,6 +328,7 @@ class PenaltyType(Enum):
         on_offense=True,
         on_defense=True,
         assessed_after_play=False,
+        enabled=False
     )
     DELAY_OF_KICKOFF = PenaltySpec(
         name="Delay of Kickoff",
@@ -347,19 +336,22 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     INVALID_FAIR_CATCH_SIGNAL = PenaltySpec(
         name="Invalid Fair Catch Signal",
         penalty_distance=5,
         on_offense=False,
         on_defense=True,  # Receiving team making the signal
-        assessed_after_play=False,
+        assessed_after_play=False,  
+        enabled=False
     )
     LEAPING = Defensive_PenaltySpec(
         name="Leaping",
         penalty_distance=15,
         assessed_after_play=False,
         automatic_first_down=True,
+        enabled=False
     )
     LOW_BLOCK = PenaltySpec(
         name="Low Block",
@@ -375,6 +367,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     LOWERING_THE_HEAD_TO_MAKE_FORCIBLE_CONTACT = Personal_FoulSpec(
         name="Lowering the Head to Make Forcible Contact",
@@ -393,6 +386,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team player stepping out voluntarily
         on_defense=False,
         assessed_after_play=False,
+        enabled = False
     )
     HORSE_COLLAR_TACKLE = Personal_FoulSpec(
         name="Horse Collar Tackle",
@@ -418,6 +412,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     ILLEGAL_DOUBLE_TEAM_BLOCK = PenaltySpec(
         name="Illegal Double-Team Block",
@@ -425,6 +420,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Receiving team on kickoffs
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     ILLEGAL_KICK_KICKING_LOOSE_BALL = PenaltySpec(
         name="Illegal Kick/Kicking Loose Ball",
@@ -451,7 +447,8 @@ class PenaltyType(Enum):
         penalty_distance=15,
         on_offense=True,  # Receiving team on kickoffs
         on_defense=False,
-        assessed_after_play=False,
+        assessed_after_play=False,  
+        enabled=False
     )
     KICKOFF_SHORT_OF_LANDING_ZONE = PenaltySpec(
         name="Kickoff Short of Landing Zone",
@@ -459,6 +456,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     HIP_DROP_TACKLE = Personal_FoulSpec(
         name="Hip Drop Tackle",
@@ -473,6 +471,7 @@ class PenaltyType(Enum):
         on_defense=False,
         assessed_after_play=False,
         loss_of_down=True,
+        enabled=False
     )
     ILLEGAL_KICK = PenaltySpec(
         name="Illegal Kick",
@@ -480,6 +479,7 @@ class PenaltyType(Enum):
         on_offense=True,
         on_defense=True,
         assessed_after_play=False,
+        enabled=False
     )
     PLAYER_OUT_OF_BOUNDS_ON_PUNT = PenaltySpec(
         name="Player Out of Bounds on Punt",
@@ -487,6 +487,7 @@ class PenaltyType(Enum):
         on_offense=True,  # Kicking team gunner/player going out voluntarily
         on_defense=False,
         assessed_after_play=False,
+        enabled=False
     )
     ILLGEAL_PROCEDURE = PenaltySpec(
         name="Illegal Procedure",
@@ -494,18 +495,13 @@ class PenaltyType(Enum):
         on_offense=True,
         on_defense=True,
         assessed_after_play=False,
+        enabled=False
     )
     ILLEGAL_RECIEVER_PASS = Offensive_PenaltySpec(
         name="Illegal Receiver Pass",
         penalty_distance=5,
         assessed_after_play=False,
         loss_of_down=True,  # Ineligible player touching forward pass
-    )
-    HORSE_COLLAR = Personal_FoulSpec(
-        name="Horse Collar",
-        on_offense=True,
-        on_defense=True,
-        automatic_first_down=True,
     )
 
 class SurfaceType(StrEnum):
