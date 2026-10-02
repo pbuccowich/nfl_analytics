@@ -116,7 +116,7 @@ class DataManager:
         return df.fillna(fill_na_value)
 
     @classmethod
-    def prepare_features(
+    def one_hot_encode_play_types(
         cls,
         df: pd.DataFrame,
         scenario_columns: list[str],

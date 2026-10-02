@@ -25,10 +25,12 @@ def _get_parameter_grid():
 
     return param_space
 
-def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5):
-    data = DataManager.get_data(path_to_json = (Path.cwd() / "nfl/data").resolve())
-    data = DataManager.clean_data(data, excluded_play_types=EXCLUDED_PLAY_TYPES, target_col="wpa")
-    data, feature_cols = DataManager.prepare_features(data, scenario_columns=SCENARIO_COLS, play_columns=PLAY_COLS)
+def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, feature_cols = None):
+    if data is None:
+        data = DataManager.get_data(path_to_json = (Path.cwd() / "nfl/data").resolve()) # Pulls data
+        data = DataManager.clean_data(data, excluded_play_types=EXCLUDED_PLAY_TYPES, target_col="wpa") # maps to enums, drops unwanted data
+    if feature_cols is None:
+        data, feature_cols = DataManager.one_hot_encode_play_types(data, scenario_columns=SCENARIO_COLS, play_columns=PLAY_COLS) # one hot encode play_type and extract columns
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Cuda device count: ", torch.cuda.device_count())
