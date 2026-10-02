@@ -50,9 +50,9 @@ class Scenario:
 class TransitionResult:
     # State transition output after evaluating play outcome
     next_scenario: Scenario
-    is_touchdown: bool
-    is_turnover: bool
-    is_safety: bool
-    is_game_over: bool
-    penalty: Penalty
+    is_touchdown: bool = False
+    is_turnover: bool = False
+    is_safety: bool = False
+    is_game_over: bool = False
+    penalty: PenaltySpec | None = None
     
