@@ -72,7 +72,7 @@ class PipelineDriver:
 
         return float(np.mean(fold_losses))
 
-    def select_parameters(
+def select_parameters(
         self,
         X: torch.Tensor,
         y: torch.Tensor,
@@ -89,13 +89,17 @@ class PipelineDriver:
 
         def objective(trial: optuna.Trial) -> float:
             hparams = {}
-            for k, (low, high, distribution) in param_space.items():
+            for k, spec in param_space.items():
+                low, high, distribution = spec[0], spec[1], spec[2]
+                
                 if distribution == "int":
                     hparams[k] = trial.suggest_int(k, low, high)
                 elif distribution == "float":
                     hparams[k] = trial.suggest_float(k, low, high)
                 elif distribution == "log":
                     hparams[k] = trial.suggest_float(k, low, high, log=True)
+                elif distribution == "bool":
+                    hparams[k] = trial.suggest_categorical(k, [True, False])
                 elif distribution == "categorical":
                     hparams[k] = trial.suggest_categorical(k, low)  # low contains choices list
 
@@ -112,6 +116,8 @@ class PipelineDriver:
             input_size=X.shape[1],
             num_hidden_layers=int(self.best_params["num_hidden_layers"]),
             hidden_size=int(self.best_params["hidden_size"]),
+            dropout_rate=float(self.best_params.get("dropout_rate", 0.0)),
+            use_tanh_output=bool(self.best_params.get("use_tanh_output", False)),
         ).to(self.device)
 
         optimizer = torch.optim.Adam(
