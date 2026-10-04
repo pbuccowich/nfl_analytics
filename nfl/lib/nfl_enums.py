@@ -459,7 +459,7 @@ class PenaltyType(Enum):
     )
     KICKOFF_SHORT_OF_LANDING_ZONE = PenaltySpec(
         name="Kickoff Short of Landing Zone",
-        penalty_distance=None,  # Treated as kickoff out of bounds (ball placed at the 40-yard line)
+        penalty_distance=None,  # Treated as kickoff out of bounds
         on_offense=True,  # Kicking team
         on_defense=False,
         assessed_after_play=False,

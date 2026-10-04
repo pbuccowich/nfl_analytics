@@ -34,12 +34,14 @@ class PlaySimulator:
         is_on_offense = self._sample_penalty_side(spec)
         distance = spec.penalty_distance if spec.penalty_distance is not None else 15
 
-        return [PenaltyHelper(penalty=penalty_type, is_on_offense=is_on_offense, distance=distance)]
+        return [PenaltyHelper(penalty=penalty_type,
+                              is_on_offense=is_on_offense,
+                              distance=distance)]
 
     def get_play_outcome(
         self, scenario: Scenario, play: torch.Tensor
     ) -> TransitionResult:
-        penalties = self._generate_penalty(scenario)
+        self._generate_penalty(scenario)
 
         # see if there's a turnover too
         # if turnover + off penalty -> turnover

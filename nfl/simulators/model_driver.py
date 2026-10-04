@@ -33,7 +33,9 @@ class NNPolicyModel(Protocol):
 
             play_performances.append(score)
 
-        best_idx = max(range(len(play_performances)), key=lambda i: play_performances[i])
+        best_idx = max(
+            range(len(play_performances)), key=lambda i: play_performances[i]
+            )
         return possible_plays[best_idx]
 
 class Driver:
@@ -44,7 +46,9 @@ class Driver:
         # Placeholder for generating initial scenario
         pass
 
-    def run_drive(self, current_scenario: Scenario | None = None) -> tuple[bool, int, Scenario | None]:
+    def run_drive(self,
+                  current_scenario: Scenario | None = None
+                  ) -> tuple[bool, int, Scenario | None]:
         drive_in_progress: bool = True
         if current_scenario is None:
             current_scenario = self._generate_starting_scenario()
@@ -55,7 +59,11 @@ class Driver:
         while drive_in_progress:
             play = self.policy.select_play(current_scenario)
             current_scenario, transition_result = self.simulator.get_play_outcome(current_scenario, play)
-            if transition_result.is_game_over or transition_result.is_touchdown or transition_result.is_safety or transition_result.is_turnover:
+            end_of_drive = any([transition_result.is_game_over,
+                                transition_result.is_touchdown,
+                                transition_result.is_safety,
+                                transition_result.is_turnover])
+            if end_of_drive:
                 drive_in_progress = False
                 if transition_result.is_touchdown:
                     points_scored = 7
