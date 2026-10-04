@@ -1,7 +1,9 @@
+import inspect
 from pathlib import Path
+
 import torch
 import torch.nn as nn
-import inspect
+
 
 class EnsembleModel(nn.Module):
 

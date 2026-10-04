@@ -1,9 +1,10 @@
 import numpy as np
+import optuna
 import torch
 from sklearn.model_selection import KFold, train_test_split
-from core.trainer.ensemble import EnsembleModel
-import optuna
 from torch.utils.tensorboard import SummaryWriter
+
+from core.trainer.ensemble import EnsembleModel
 
 
 class PipelineDriver:
@@ -181,7 +182,7 @@ class PipelineDriver:
             )
 
             metrics = solver.train(X_tr, y_tr, X_val, y_val, saveBest=True)
-            
+
             if writer:
                 writer.add_scalar("Loss/val", metrics["best_val_loss"], fold)
                 writer.close()

@@ -1,7 +1,9 @@
+from typing import NamedTuple
+
+import pandas as pd
 import torch
 from sklearn.preprocessing import StandardScaler
-from typing import NamedTuple
-import pandas as pd
+
 
 class DatasetSplit(NamedTuple):
     X_train: torch.Tensor

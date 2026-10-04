@@ -23,3 +23,23 @@ dev = [
     "ipykernel",
     "ruff",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes (catches unused imports, undefined variables)
+    "I",   # isort (automatically sorts imports)
+    "UP",  # pyupgrade (upgrades syntax for target Python version)
+    "Q",   # flake8-quotes (enforces consistent string quotes)
+]
+
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

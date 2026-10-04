@@ -1,16 +1,18 @@
+from typing import Any
+
 import joblib
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import lightgbm as lgb
-from typing import List, Dict, Any, Optional
+
 
 class PenaltyPredictor:
     def __init__(
         self,
-        possible_penalties: List[Any],
-        feature_cols: List[str],
-        categorical_cols: List[str],
-        lgb_params: Optional[Dict[str, Any]] = None
+        possible_penalties: list[Any],
+        feature_cols: list[str],
+        categorical_cols: list[str],
+        lgb_params: dict[str, Any] | None = None
     ):
         self.possible_penalties = possible_penalties
         self.feature_cols = feature_cols
@@ -23,7 +25,7 @@ class PenaltyPredictor:
             "random_state": 42
         }
         # Dictionary storing all N trained LightGBM models
-        self.models: Dict[Any, lgb.LGBMClassifier] = {}
+        self.models: dict[Any, lgb.LGBMClassifier] = {}
 
     def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensures categorical columns are typed for LightGBM."""
@@ -62,7 +64,7 @@ class PenaltyPredictor:
 
         return self
 
-    def predict_probs(self, scenario_and_play: pd.DataFrame) -> Dict[Any, float]:
+    def predict_probs(self, scenario_and_play: pd.DataFrame) -> dict[Any, float]:
         """Calculates P(Penalty) for all N models given a scenario and play call."""
         X = self._prepare_features(scenario_and_play)
         return {
@@ -70,11 +72,11 @@ class PenaltyPredictor:
             for penalty, model in self.models.items()
         }
 
-    def sample_penalties(self, scenario_and_play: pd.DataFrame) -> List[Any]:
+    def sample_penalties(self, scenario_and_play: pd.DataFrame) -> list[Any]:
         """Bernoulli sampling across all N penalties for simulator execution."""
         probs = self.predict_probs(scenario_and_play)
         return [
-            penalty for penalty, prob in probs.items() 
+            penalty for penalty, prob in probs.items()
             if np.random.rand() < prob
         ]
 

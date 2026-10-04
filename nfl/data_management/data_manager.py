@@ -1,7 +1,9 @@
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import yaml
+
 from nfl.lib import nfl_enums as enums
 from nfl.lib.constants import PENALTY_ENUM_MAPPING
 
@@ -35,7 +37,7 @@ DATA_MAP = {
 class DataManager:
     _config_file = Path("nfl/data_management/config.yaml")
     if _config_file.exists():
-        with open(_config_file, "r") as f:
+        with open(_config_file) as f:
             _raw_config = yaml.safe_load(f)
     else:
         _raw_config = {}

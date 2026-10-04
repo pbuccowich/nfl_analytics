@@ -1,5 +1,12 @@
 from enum import Enum, StrEnum
-from nfl.lib.datamodels import PenaltySpec, Defensive_PenaltySpec, Offensive_PenaltySpec, Personal_FoulSpec
+
+from nfl.lib.datamodels import (
+    Defensive_PenaltySpec,
+    Offensive_PenaltySpec,
+    PenaltySpec,
+    Personal_FoulSpec,
+)
+
 
 class NFLTeam(StrEnum):
     PHI = "PHI"
@@ -343,7 +350,7 @@ class PenaltyType(Enum):
         penalty_distance=5,
         on_offense=False,
         on_defense=True,  # Receiving team making the signal
-        assessed_after_play=False,  
+        assessed_after_play=False,
         enabled=False
     )
     LEAPING = Defensive_PenaltySpec(
@@ -447,7 +454,7 @@ class PenaltyType(Enum):
         penalty_distance=15,
         on_offense=True,  # Receiving team on kickoffs
         on_defense=False,
-        assessed_after_play=False,  
+        assessed_after_play=False,
         enabled=False
     )
     KICKOFF_SHORT_OF_LANDING_ZONE = PenaltySpec(
@@ -569,7 +576,7 @@ class DriveResult(StrEnum):
     TURNOVER_ON_DOWNS = "Turnover on downs"
 
 class SpecialTeamsPlayType(StrEnum):
-    PENALTY = 'Penalty'
+    PENALTY = "Penalty"
 
 class DriveStartReason(StrEnum):
     PUNT = "Punt"

@@ -31,7 +31,7 @@ PLAY_COLS = [
 ]
 
 RESULT_COLS = [
-    "epa",  
+    "epa",
     "wpa",
     "success",
     "result",

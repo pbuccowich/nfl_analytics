@@ -1,8 +1,8 @@
+
 import optuna
 import pandas as pd
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from typing import Union
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -14,7 +14,7 @@ class OptunaSearch:
         solver_cls,
         model_cls,
         criterion,
-        device: Union[str, torch.device] = "cpu",
+        device: str | torch.device = "cpu",
         num_epochs: int = 100,
         input_size: int = 10,
         betas: tuple = (0.9, 0.999),
@@ -57,7 +57,7 @@ class OptunaSearch:
                 hparams[key] = trial.suggest_categorical(key, value)
             else:
                 raise ValueError(f"Unsupported format for param '{key}': {value}. Use a list or a (min, max) tuple.")
-        
+
         return hparams
 
     def _objective(self, trial: optuna.Trial, X_tr, y_tr, X_v, y_v) -> float:

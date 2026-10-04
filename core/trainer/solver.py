@@ -1,5 +1,6 @@
 import copy
 import pathlib
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -7,7 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 class Solver:
-
     def __init__(
         self,
         model,

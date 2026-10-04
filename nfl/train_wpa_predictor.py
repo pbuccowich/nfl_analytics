@@ -1,12 +1,15 @@
-import torch
-import numpy as np
 from pathlib import Path
-from nfl.data_management.data_manager import DataManager
-from nfl.models.wpa_predictor import WPAPredictor
-from core.trainer.solver import Solver
+
+import numpy as np
+import torch
+
 from core.trainer.pipeline import PipelineDriver
+from core.trainer.solver import Solver
 from core.utils.lib.data_handling import create_train_test_split
-from nfl.lib.constants import EXCLUDED_PLAY_TYPES, SCENARIO_COLS, PLAY_COLS
+from nfl.data_management.data_manager import DataManager
+from nfl.lib.constants import EXCLUDED_PLAY_TYPES, PLAY_COLS, SCENARIO_COLS
+from nfl.models.wpa_predictor import WPAPredictor
+
 
 def _get_parameter_grid():
     MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS = 1, 20

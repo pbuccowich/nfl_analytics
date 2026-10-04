@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+
 import torch
+
 
 @dataclass(frozen=True)
 class PenaltySpec:
@@ -56,4 +58,3 @@ class TransitionResult:
     is_safety: bool = False
     is_game_over: bool = False
     penalty: PenaltySpec | None = None
-    

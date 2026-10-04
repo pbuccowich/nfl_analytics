@@ -1,6 +1,6 @@
-from dataclasses import dataclass, replace
-from typing import Tuple
 import random
+from dataclasses import dataclass
+
 import torch
 
 from nfl.lib.datamodels import Scenario, TransitionResult
@@ -50,7 +50,7 @@ class PlaySimulator:
         # Depends on the penalty otherwise. If off yds > def penalty -> off yds and ignore penalty
         # if def penalty and after play, add them up
         # at this point should be no penalties
-        # run play, can yeild yards, lose yards, incomplete, etc. Will want to run clock off here too. 
+        # run play, can yeild yards, lose yards, incomplete, etc. Will want to run clock off here too.
         # see if play went far enough to get touchdown, saftey, etc. will need to handle those.
         # after running down the clock will need to see if we are at end of half or game and handle those.
         # return resulting TransitionResult

@@ -10,8 +10,9 @@ setup: ## Create venv and install dependencies
 	.venv/bin/pip install --upgrade pip pip-tools
 	.venv/bin/pip install -e .[dev]
 
-requirements: ## Compile dependencies into requirements.txt
+requirements: ## Compile core and dev dependencies
 	pip-compile --output-file=requirements.txt pyproject.toml
+	pip-compile --extra=dev --output-file=requirements-dev.txt pyproject.toml
 
 install: ## Install package locally in editable mode
 	pip install -e .
@@ -20,7 +21,8 @@ format: ## Auto-format code
 	ruff format .
 
 lint: ## Run linter and type checks
-	ruff check .
+	ruff check --fix .
+	mypy .
 
 test: ## Run unit tests
 	pytest tests/
