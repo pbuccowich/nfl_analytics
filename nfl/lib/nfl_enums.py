@@ -67,7 +67,7 @@ class PassOutcome(StrEnum):
     COMPLETE = "complete"
     INCOMPLETE = "incomplete"
     INTERCEPTION = "interception"
-    FUMBLES = "fumbles"
+    FUMBLE = "fumble"
     SACK = "sack"
 
 class SeasonType(StrEnum):

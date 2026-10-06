@@ -11,9 +11,9 @@ from nfl.lib.constants import EXCLUDED_PLAY_TYPES, PLAY_COLS, SCENARIO_COLS
 from nfl.models.wpa_predictor import WPAPredictor
 
 
-def _get_parameter_grid():
+def _get_parameter_grid(input_size: int = 10):
     MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS = 1, 20
-    MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE = 16, 512
+    MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE = input_size, input_size*30
     MIN_LEARNING_RATE, MAX_LEARNING_RATE = 1e-5, 1e-2
     MIN_BATCH_SIZE, MAX_BATCH_SIZE = 64, 512
     MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY = 1e-5, 1e-2
@@ -51,7 +51,7 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, 
     print("Cuda device count: ", torch.cuda.device_count())
     print(f"Using {device} device")
 
-    param_grid = _get_parameter_grid()
+    param_grid = _get_parameter_grid(input_size = data.shape[0])
     split = create_train_test_split(df=data,
                                     feature_cols=feature_cols,
                                     target_col="wpa",

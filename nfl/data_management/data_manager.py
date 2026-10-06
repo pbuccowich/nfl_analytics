@@ -111,11 +111,48 @@ class DataManager:
                 df["run_gap"].map(gap_map).fillna(-5).astype(int)
             )
 
-        # 5. Convert boolean columns to float before filling NAs
+        # 5. Map pass length to integer (1 for short, 2 for deep, 0 for missing/other)
+        if "pass_length" in df.columns:
+            df["pass_length"] = cls._map_pass_length(df["pass_length"])
+
+        # 6. Convert boolean columns to float before filling NAs
         bool_cols = df.select_dtypes(include=["bool", "boolean"]).columns
         df[bool_cols] = df[bool_cols].astype(float)
 
         return df.fillna(fill_na_value)
+
+    @classmethod
+    def create_pass_outcome_targets(cls, df: pd.DataFrame) -> pd.DataFrame:
+        """Derives hierarchical PassOutcome enum string targets and integer target indices."""
+        df = df.copy()
+
+        # Priority conditions
+        conditions = [
+            df.get("interception", 0) == 1,
+            df.get("sack", 0) == 1,
+            df.get("fumble_lost", 0) == 1,
+            df.get("complete_pass", 0) == 1,
+        ]
+
+        choices = [
+            enums.PassOutcome.INTERCEPTION.value,
+            enums.PassOutcome.SACK.value,
+            enums.PassOutcome.FUMBLE.value,
+            enums.PassOutcome.COMPLETE.value,
+        ]
+
+        # Default fallback is incomplete pass
+        df["pass_outcome_str"] = np.select(
+            conditions, choices, default=enums.PassOutcome.INCOMPLETE.value
+        )
+
+        # Map enum strings to target indices [0, 1, 2, 3, 4]
+        outcome_to_idx = {
+            outcome.value: idx for idx, outcome in enumerate(enums.PassOutcome)
+        }
+        df["pass_outcome_target"] = df["pass_outcome_str"].map(outcome_to_idx).astype(int)
+
+        return df
 
     @classmethod
     def one_hot_encode_play_types(
@@ -153,6 +190,19 @@ class DataManager:
         return df, epa_feature_columns
 
     # --- Internal Helper Methods ---
+
+    @classmethod
+    def _map_pass_length(cls, series: pd.Series) -> pd.Series:
+        """Maps pass_length enum or string values to 1 (short), 2 (deep), or 0."""
+        def _to_int(val):
+            val_str = str(val).lower() if pd.notnull(val) else ""
+            if "short" in val_str:
+                return 1
+            elif "deep" in val_str:
+                return 2
+            return 0
+
+        return series.apply(_to_int).astype(int)
 
     @classmethod
     def _normalize_to_boolean(
