@@ -1,3 +1,4 @@
+import inspect
 import numpy as np
 import optuna
 import torch
@@ -31,6 +32,18 @@ class PipelineDriver:
         self.best_params: dict | None = None
         self.best_cv_loss: float | None = None
 
+    def _instantiate_model(self, input_size: int, hparams: dict) -> torch.nn.Module:
+        """Dynamically filters hparams to match model_cls signature."""
+        sig = inspect.signature(self.model_cls.__init__)
+        accepted_args = set(sig.parameters.keys()) - {"self"}
+
+        model_kwargs = {"input_size": input_size}
+        for k, v in hparams.items():
+            if k in accepted_args:
+                model_kwargs[k] = type(v)(v)
+
+        return self.model_cls(**model_kwargs).to(self.device)
+
     def _evaluate_kfolds(self, X: torch.Tensor, y: torch.Tensor, hparams: dict, trial=None) -> float:
         kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=42)
         fold_losses = []
@@ -41,16 +54,12 @@ class PipelineDriver:
             X_tr, y_tr = X[train_idx], y[train_idx]
             X_val, y_val = X[val_idx], y[val_idx]
 
-            model = self.model_cls(
-                input_size=X.shape[1],
-                num_hidden_layers=int(hparams["num_hidden_layers"]),
-                hidden_size=int(hparams["hidden_size"]),
-            ).to(self.device)
+            model = self._instantiate_model(X.shape[1], hparams)
 
             optimizer = torch.optim.Adam(
                 model.parameters(),
                 lr=float(hparams["lr"]),
-                weight_decay=float(hparams["weight_decay"]),
+                weight_decay=float(hparams.get("weight_decay", 0.0)),
             )
 
             solver = self.solver_cls(
@@ -72,7 +81,7 @@ class PipelineDriver:
 
         return float(np.mean(fold_losses))
 
-def select_parameters(
+    def select_parameters(
         self,
         X: torch.Tensor,
         y: torch.Tensor,
@@ -101,7 +110,7 @@ def select_parameters(
                 elif distribution == "bool":
                     hparams[k] = trial.suggest_categorical(k, [True, False])
                 elif distribution == "categorical":
-                    hparams[k] = trial.suggest_categorical(k, low)  # low contains choices list
+                    hparams[k] = trial.suggest_categorical(k, low)
 
             return self._evaluate_kfolds(X_search, y_search, hparams, trial=trial)
 
@@ -111,19 +120,13 @@ def select_parameters(
         self.best_params = study.best_trial.params
         self.best_cv_loss = study.best_value
 
-        # Verification step
-        temp_model = self.model_cls(
-            input_size=X.shape[1],
-            num_hidden_layers=int(self.best_params["num_hidden_layers"]),
-            hidden_size=int(self.best_params["hidden_size"]),
-            dropout_rate=float(self.best_params.get("dropout_rate", 0.0)),
-            use_tanh_output=bool(self.best_params.get("use_tanh_output", False)),
-        ).to(self.device)
+        # Verification step dynamically built
+        temp_model = self._instantiate_model(X.shape[1], self.best_params)
 
         optimizer = torch.optim.Adam(
             temp_model.parameters(),
             lr=float(self.best_params["lr"]),
-            weight_decay=float(self.best_params["weight_decay"]),
+            weight_decay=float(self.best_params.get("weight_decay", 0.0)),
         )
 
         solver = self.solver_cls(
@@ -161,22 +164,18 @@ def select_parameters(
         X_np, y_np = X.cpu().numpy(), y.cpu().numpy()
 
         for fold, (train_idx, val_idx) in enumerate(kf.split(X_np, y_np)):
-            X_tr, y_tr = torch.tensor(X_np[train_idx]), torch.tensor(y_np[train_idx])
-            X_val, y_val = torch.tensor(X_np[val_idx]), torch.tensor(y_np[val_idx])
+            X_tr, y_tr = torch.tensor(X_np[train_idx], device=self.device), torch.tensor(y_np[train_idx], device=self.device)
+            X_val, y_val = torch.tensor(X_np[val_idx], device=self.device), torch.tensor(y_np[val_idx], device=self.device)
 
-            model = self.model_cls(
-                input_size=X.shape[1],
-                num_hidden_layers=int(self.best_params["num_hidden_layers"]),
-                hidden_size=int(self.best_params["hidden_size"]),
-            ).to(self.device)
+            model = self._instantiate_model(X.shape[1], self.best_params)
 
-            optimizer = torch.optim.Adam(
+            optimizer = torch.optim.AdamW(
                 model.parameters(),
                 lr=float(self.best_params["lr"]),
-                weight_decay=float(self.best_params["weight_decay"]),
+                weight_decay=float(self.best_params.get("weight_decay", 0.0)),
             )
 
-            writer = SummaryWriter(f"{self.log_dir}/fold_{fold}") if self.log_dir and SummaryWriter else None
+            writer = SummaryWriter(f"{self.log_dir}/fold_{fold}") if self.log_dir else None
 
             solver = self.solver_cls(
                 model=model,

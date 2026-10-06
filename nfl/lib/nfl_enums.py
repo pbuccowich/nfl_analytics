@@ -62,6 +62,14 @@ class TeamType(StrEnum):
     HOME = "home"
     AWAY = "away"
 
+# I made this up, we're going to use it for the NN
+class PassOutcome(StrEnum):
+    COMPLETE = "complete"
+    INCOMPLETE = "incomplete"
+    INTERCEPTION = "interception"
+    FUMBLES = "fumbles"
+    SACK = "sack"
+
 class SeasonType(StrEnum):
     REGULAR = "REG"
     POSTSEASON = "POST"
