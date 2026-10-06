@@ -76,7 +76,7 @@ class DataManager:
         cls,
         df: pd.DataFrame,
         excluded_play_types: list | set | None = None,
-        target_col: str = "epa",
+        target_col: str = "wpa",
         fill_na_value: float = 0.0,
     ) -> pd.DataFrame:
         """Filters invalid records, derives play indicators, and handles missing values."""
@@ -103,6 +103,9 @@ class DataManager:
         if "surface" in df.columns:
             df["has_turf"] = df["surface"] != enums.SurfaceType.GRASS
             df = df.drop(columns=["surface"])
+
+        if "play_type" in df.columns:
+            df["play_type"] = df["play_type"].astype("category").cat.codes
 
         # 4. Map positional gaps
         if "run_gap" in df.columns:

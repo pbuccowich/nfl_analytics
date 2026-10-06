@@ -51,7 +51,7 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, 
     print("Cuda device count: ", torch.cuda.device_count())
     print(f"Using {device} device")
 
-    param_grid = _get_parameter_grid(input_size = data.shape[0])
+    param_grid = _get_parameter_grid(input_size = len(feature_cols))
     split = create_train_test_split(df=data,
                                     feature_cols=feature_cols,
                                     target_col="wpa",
@@ -82,7 +82,7 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, 
     ensemble = pipeline.train_networks(
         X=X_train,
         y=y_train,
-        save_path="ensemble.pth",
+        save_path="wpa_ensemble.pth",
     )
 
     # 4. Predict

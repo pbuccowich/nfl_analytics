@@ -40,17 +40,9 @@ class PassOutcomeEngine(nn.Module):
             logits = logits / max(temperature, 1e-5)
         return F.softmax(logits, dim=-1)
 
-    def predict_outcome(self, x: torch.Tensor) -> torch.Tensor:
-        """Returns the single most likely outcome index (deterministic)."""
-        probs = self.predict_proba(x)
-        return torch.argmax(probs, dim=-1)
-
     def sample_outcome(self, x: torch.Tensor, num_samples: int = 1, temperature: float = 1.0) -> torch.Tensor:
         """Samples outcome indices based on the predicted probability distribution."""
         probs = self.predict_proba(x, temperature=temperature)
-        
-        # torch.multinomial samples indices according to input probability weights
-        # Shape: (batch_size, num_samples)
         sampled_indices = torch.multinomial(probs, num_samples=num_samples)
         return sampled_indices
 
