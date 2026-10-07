@@ -1,8 +1,9 @@
 import copy
 import pathlib
-
+import optuna
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 
@@ -33,7 +34,26 @@ class Solver:
         self.optuna_trial = optuna_trial
         self.bestModel = None
 
+        # Check if loss function requires 1D integer targets (Classification)
+        self.is_classification = isinstance(
+            self.criterion, (nn.CrossEntropyLoss, nn.NLLLoss)
+        )
+
+    def _prepare_targets(self, targets: torch.Tensor) -> torch.Tensor:
+        """Dynamically reshapes and casts targets based on criterion type."""
+        targets = targets.to(self.device)
+
+        if self.is_classification:
+            # Classification requires 1D Long Tensors: (batch_size,)
+            return targets.squeeze().long()
+        else:
+            # Regression requires 2D Float Tensors: (batch_size, 1) or matching output dim
+            return targets.view(-1, 1).float()
+
     def train(self, x, y, x_v, y_v, modelName=None, saveBest=True) -> dict:
+        # Determine target tensor type based on loss function
+        target_dtype = torch.long if self.is_classification else torch.float32
+
         train_ds = TensorDataset(
             (
                 x.detach().clone().to(torch.float32)
@@ -41,9 +61,9 @@ class Solver:
                 else torch.tensor(x, dtype=torch.float32)
             ),
             (
-                y.detach().clone().to(torch.float32)
+                y.detach().clone().to(target_dtype)
                 if isinstance(y, torch.Tensor)
-                else torch.tensor(y, dtype=torch.float32)
+                else torch.tensor(y, dtype=target_dtype)
             ),
         )
         valid_ds = TensorDataset(
@@ -53,9 +73,9 @@ class Solver:
                 else torch.tensor(x_v, dtype=torch.float32)
             ),
             (
-                y_v.detach().clone().to(torch.float32)
+                y_v.detach().clone().to(target_dtype)
                 if isinstance(y_v, torch.Tensor)
-                else torch.tensor(y_v, dtype=torch.float32)
+                else torch.tensor(y_v, dtype=target_dtype)
             ),
         )
 
@@ -78,7 +98,7 @@ class Solver:
 
             for inputs, targets in train_loader:
                 inputs = inputs.to(self.device)
-                targets = targets.to(self.device).view(-1, 1)
+                targets = self._prepare_targets(targets)
 
                 self.optimizer.zero_grad()
                 outputs = self.model(inputs)
@@ -98,7 +118,7 @@ class Solver:
             with torch.no_grad():
                 for inputs, targets in valid_loader:
                     inputs = inputs.to(self.device)
-                    targets = targets.to(self.device).view(-1, 1)
+                    targets = self._prepare_targets(targets)
 
                     outputs = self.model(inputs)
                     loss = self.criterion(outputs, targets)
@@ -109,15 +129,18 @@ class Solver:
 
             # --- Optuna Intermediate Pruning ---
             if self.optuna_trial is not None:
-                import optuna
                 self.optuna_trial.report(epoch_valid_loss, epoch)
                 if self.optuna_trial.should_prune():
                     raise optuna.exceptions.TrialPruned()
 
             # --- Unified TensorBoard Logging ---
             if self.writer:
-                self.writer.add_scalars("Loss/Train", {self.run_name: epoch_train_loss}, epoch)
-                self.writer.add_scalars("Loss/Validation", {self.run_name: epoch_valid_loss}, epoch)
+                self.writer.add_scalars(
+                    "Loss/Train", {self.run_name: epoch_train_loss}, epoch
+                )
+                self.writer.add_scalars(
+                    "Loss/Validation", {self.run_name: epoch_valid_loss}, epoch
+                )
 
             # --- Model Checkpointing ---
             if epoch_valid_loss < best_valid_loss:

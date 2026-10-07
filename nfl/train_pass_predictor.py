@@ -74,6 +74,7 @@ def train_pass_outcome_engine(
         target_col="pass_outcome_target",
         train_frac=0.95,
         device=device,
+        flatten_target=True,
     )
     X_train, y_train, X_test, y_test, scaler = split
 

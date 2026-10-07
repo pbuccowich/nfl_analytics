@@ -44,40 +44,51 @@ class PipelineDriver:
 
         return self.model_cls(**model_kwargs).to(self.device)
 
-    def _evaluate_kfolds(self, X: torch.Tensor, y: torch.Tensor, hparams: dict, trial=None) -> float:
+    def _evaluate_kfolds(self, X, y, hparams: dict, trial=None) -> float:
+        """Evaluates cross-validation loss across folds for hyperparameter optimization."""
         kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=42)
         fold_losses = []
 
-        X_np, y_np = X.cpu().numpy(), y.cpu().numpy()
+        # Format batch size and learning rate from hyperparameters
+        batch_size = int(hparams.get("batch_size", 128))
+        lr = float(hparams.get("lr", 1e-3))
+        weight_decay = float(hparams.get("weight_decay", 0.0))
 
-        for fold, (train_idx, val_idx) in enumerate(kf.split(X_np, y_np)):
-            X_tr, y_tr = X[train_idx], y[train_idx]
-            X_val, y_val = X[val_idx], y[val_idx]
+        # Convert non-model kwargs to model-specific kwargs
+        model_kwargs = {
+            k: v
+            for k, v in hparams.items()
+            if k not in {"batch_size", "lr", "weight_decay"}
+        }
 
-            model = self._instantiate_model(X.shape[1], hparams)
+        # Ensure input dimension matches features
+        in_dim = X.shape[1] if isinstance(X, (np.ndarray, torch.Tensor)) else len(X[0])
 
+        for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
+            # 1. Slice Fold Data (Slicing preserves underlying tensor/array shape)
+            X_tr, X_val = X[train_idx], X[val_idx]
+            y_tr, y_val = y[train_idx], y[val_idx]
+
+            # 2. Instantiate Model and Optimizer for Current Fold
+            model = self.model_cls(in_dim=in_dim, **model_kwargs).to(self.device)
             optimizer = torch.optim.Adam(
-                model.parameters(),
-                lr=float(hparams["lr"]),
-                weight_decay=float(hparams.get("weight_decay", 0.0)),
+                model.parameters(), lr=lr, weight_decay=weight_decay
             )
 
+            # 3. Instantiate Solver
             solver = self.solver_cls(
                 model=model,
                 device=self.device,
                 num_epochs=self.num_epochs,
-                batch_size=int(hparams["batch_size"]),
+                batch_size=batch_size,
                 optimizer=optimizer,
                 criterion=self.criterion,
+                optuna_trial=trial if fold == 0 else None,  # Prune early on fold 0
             )
 
+            # 4. Train Fold Model (saveBest=False to prevent writing fold checkpoints)
             metrics = solver.train(X_tr, y_tr, X_val, y_val, saveBest=False)
             fold_losses.append(metrics["best_val_loss"])
-
-            if trial is not None:
-                trial.report(np.mean(fold_losses), step=fold)
-                if trial.should_prune():
-                    raise optuna.exceptions.TrialPruned()
 
         return float(np.mean(fold_losses))
 

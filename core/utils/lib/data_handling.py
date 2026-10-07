@@ -1,66 +1,56 @@
-from typing import NamedTuple
-
-import pandas as pd
 import torch
+import pandas as pd
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-
-
-class DatasetSplit(NamedTuple):
-    X_train: torch.Tensor
-    y_train: torch.Tensor
-    X_test: torch.Tensor
-    y_test: torch.Tensor
-    scaler: StandardScaler
 
 
 def create_train_test_split(
     df: pd.DataFrame,
     feature_cols: list[str],
-    target_col: str = "epa",
-    train_frac: float = 0.8,
-    random_state: int = 42,
-    device: torch.device | str | None = None,
-) -> DatasetSplit:
-    """Splits, scales, and converts a DataFrame into PyTorch tensors."""
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = torch.device(device)
+    target_col: str,
+    train_frac: float = 0.95,
+    device: torch.device | str = "cpu",
+    flatten_target: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, StandardScaler]:
+    """
+    Splits DataFrame into scaled PyTorch train and test tensors.
 
-    # 1. Train / test split
-    train_df = df.sample(frac=train_frac, random_state=random_state)
-    test_df = df.drop(train_df.index)
+    Args:
+        df: Input DataFrame containing features and targets.
+        feature_cols: List of feature column names.
+        target_col: Name of the target column.
+        train_frac: Fraction of data allocated to training.
+        device: PyTorch device ('cpu' or 'cuda').
+        flatten_target: If True, reshapes y to a 1D tensor (N,). 
+                       If False, preserves 2D column matrix (N, 1).
 
-    # 2. Scale continuous features (fit on train only)
-    continuous_cols = [c for c in feature_cols if df[c].nunique() > 2]
+    Returns:
+        X_train, y_train, X_test, y_test, scaler
+    """
+    X = df[feature_cols].values
+    y = df[target_col].values
 
+    X_train_raw, X_test_raw, y_train_raw, y_test_raw = train_test_split(
+        X, y, train_size=train_frac, shuffle=True
+    )
+
+    # Scale features
     scaler = StandardScaler()
-    X_train_np = train_df[feature_cols].copy()
-    X_test_np = test_df[feature_cols].copy()
+    X_train_scaled = scaler.fit_transform(X_train_raw)
+    X_test_scaled = scaler.transform(X_test_raw)
 
-    if continuous_cols:
-        X_train_np[continuous_cols] = scaler.fit_transform(
-            train_df[continuous_cols]
-        )
-        X_test_np[continuous_cols] = scaler.transform(test_df[continuous_cols])
+    # Convert features to float tensors
+    X_train = torch.tensor(X_train_scaled, dtype=torch.float32, device=device)
+    X_test = torch.tensor(X_test_scaled, dtype=torch.float32, device=device)
 
-    # 3. Convert to PyTorch tensors
-    X_train = torch.tensor(
-        X_train_np.values, dtype=torch.float32, device=device
-    )
-    y_train = torch.tensor(
-        train_df[target_col].values, dtype=torch.float32, device=device
-    ).unsqueeze(1)
+    # Determine target tensor type and shape
+    if flatten_target:
+        # 1D long integer tensors for classification (CrossEntropyLoss)
+        y_train = torch.tensor(y_train_raw, dtype=torch.long, device=device)
+        y_test = torch.tensor(y_test_raw, dtype=torch.long, device=device)
+    else:
+        # 2D float tensors for regression (MSELoss)
+        y_train = torch.tensor(y_train_raw, dtype=torch.float32, device=device).unsqueeze(-1)
+        y_test = torch.tensor(y_test_raw, dtype=torch.float32, device=device).unsqueeze(-1)
 
-    X_test = torch.tensor(X_test_np.values, dtype=torch.float32, device=device)
-    y_test = torch.tensor(
-        test_df[target_col].values, dtype=torch.float32, device=device
-    ).unsqueeze(1)
-
-    return DatasetSplit(
-        X_train=X_train,
-        y_train=y_train,
-        X_test=X_test,
-        y_test=y_test,
-        scaler=scaler,
-    )
+    return X_train, y_train, X_test, y_test, scaler
