@@ -1,8 +1,6 @@
 import torch
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-
 
 def create_train_test_split(
     df: pd.DataFrame,
@@ -11,7 +9,7 @@ def create_train_test_split(
     train_frac: float = 0.95,
     device: torch.device | str = "cpu",
     flatten_target: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, StandardScaler]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Splits DataFrame into scaled PyTorch train and test tensors.
 
@@ -35,13 +33,13 @@ def create_train_test_split(
     )
 
     # Scale features
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train_raw)
-    X_test_scaled = scaler.transform(X_test_raw)
+#    scaler = StandardScaler()
+#    X_train_scaled = scaler.fit_transform(X_train_raw)
+#    X_test_scaled = scaler.transform(X_test_raw)
 
     # Convert features to float tensors
-    X_train = torch.tensor(X_train_scaled, dtype=torch.float32, device=device)
-    X_test = torch.tensor(X_test_scaled, dtype=torch.float32, device=device)
+    X_train = torch.tensor(X_train_raw, dtype=torch.float32, device=device)
+    X_test = torch.tensor(X_test_raw, dtype=torch.float32, device=device)
 
     # Determine target tensor type and shape
     if flatten_target:
@@ -53,4 +51,4 @@ def create_train_test_split(
         y_train = torch.tensor(y_train_raw, dtype=torch.float32, device=device).unsqueeze(-1)
         y_test = torch.tensor(y_test_raw, dtype=torch.float32, device=device).unsqueeze(-1)
 
-    return X_train, y_train, X_test, y_test, scaler
+    return X_train, y_train, X_test, y_test

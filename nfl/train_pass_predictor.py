@@ -76,7 +76,7 @@ def train_pass_outcome_engine(
         device=device,
         flatten_target=True,
     )
-    X_train, y_train, X_test, y_test, scaler = split
+    X_train, y_train, X_test, y_test = split
 
     # Convert targets to long integers for CrossEntropyLoss
     y_train = y_train.long().squeeze()

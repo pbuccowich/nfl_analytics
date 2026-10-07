@@ -57,7 +57,7 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, 
                                     target_col="wpa",
                                     train_frac = 0.95,
                                     device=device)
-    X_train, y_train, X_test, y_test, scaler = split
+    X_train, y_train, X_test, y_test = split
 
     # 1. Initialize Driver
     pipeline = PipelineDriver(

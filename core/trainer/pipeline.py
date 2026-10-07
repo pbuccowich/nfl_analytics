@@ -70,7 +70,7 @@ class PipelineDriver:
             y_tr, y_val = y[train_idx], y[val_idx]
 
             # 2. Instantiate Model and Optimizer for Current Fold
-            model = self.model_cls(in_dim=in_dim, **model_kwargs).to(self.device)
+            model = self.model_cls(input_size=in_dim, **model_kwargs).to(self.device)
             optimizer = torch.optim.Adam(
                 model.parameters(), lr=lr, weight_decay=weight_decay
             )
@@ -163,6 +163,8 @@ class PipelineDriver:
                 f"Execution Halted: Validation delta ({delta:+.2%}) exceeded threshold "
                 f"({self.max_delta_threshold:.2%}). Search space produced overfitted parameters."
             )
+
+        print(self.best_params)
 
         return self.best_params
 
