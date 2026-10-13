@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score, f1_score, log_loss
 
 from core.trainer.pipeline import PipelineDriver
 from core.trainer.solver import Solver
-from core.utils.lib.data_handling import create_train_test_split
+from core.utils.lib.data_handling import create_train_test_split, generate_class_weights
 from nfl.data_management.data_manager import DataManager
 from nfl.lib.constants import EXCLUDED_PLAY_TYPES, PLAY_COLS, SCENARIO_COLS
 from nfl.models.play_outcome_engine import PassOutcomeEngine
@@ -40,6 +40,7 @@ def train_pass_outcome_engine(
     num_splits: int = 5,
     data=None,
     feature_cols=None,
+    weigh_classes: bool = True,
 ):
     if data is None:
         data = DataManager.get_data(
@@ -82,11 +83,14 @@ def train_pass_outcome_engine(
     y_train = y_train.long().squeeze()
     y_test_np = y_test.detach().cpu().numpy().flatten().astype(int)
 
+    weights = generate_class_weights(y_train).to(device) if weigh_classes else None
+    criterion = torch.nn.CrossEntropyLoss(weight=weights).to(device)
+
     # 1. Initialize Driver with CrossEntropyLoss
     pipeline = PipelineDriver(
         solver_cls=Solver,
         model_cls=PassOutcomeEngine,
-        criterion=torch.nn.CrossEntropyLoss().to(device),
+        criterion=criterion,
         device=device,
         n_splits=num_splits,
         num_epochs=num_epoch,

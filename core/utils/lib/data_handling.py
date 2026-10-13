@@ -1,6 +1,8 @@
 import torch
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
+import numpy as np
 
 def create_train_test_split(
     df: pd.DataFrame,
@@ -52,3 +54,9 @@ def create_train_test_split(
         y_test = torch.tensor(y_test_raw, dtype=torch.float32, device=device).unsqueeze(-1)
 
     return X_train, y_train, X_test, y_test
+
+def generate_class_weights(data: torch.Tensor) -> torch.Tensor:
+    data_np = data.detach().cpu().numpy().astype(int)
+    classes = np.unique(data_np)
+    weights = compute_class_weight(class_weight="balanced", classes=classes, y=data_np)
+    return torch.tensor(weights, dtype=torch.float32)
