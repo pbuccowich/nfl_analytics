@@ -23,6 +23,7 @@ class PipelineDriver:
         self.solver_cls = solver_cls
         self.model_cls = model_cls
         self.criterion = criterion
+        self.is_classification = isinstance(criterion, torch.nn.CrossEntropyLoss)
         self.device = torch.device(device) if isinstance(device, str) else device
         self.n_splits = n_splits
         self.num_epochs = num_epochs
@@ -154,7 +155,12 @@ class PipelineDriver:
         temp_model.eval()
         with torch.no_grad():
             preds = temp_model(X_holdout_dev)
-            holdout_loss = self.criterion(preds, y_holdout_dev.view(-1, 1)).item()
+            if self.is_classification:
+                target_eval = y_holdout_dev.squeeze().long()
+            else:
+                target_eval = y_holdout_dev.view(-1, 1).float()
+                
+            holdout_loss = self.criterion(preds, target_eval).item()
 
         delta = (holdout_loss - self.best_cv_loss) / self.best_cv_loss
 

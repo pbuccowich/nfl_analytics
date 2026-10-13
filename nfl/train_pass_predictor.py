@@ -19,7 +19,7 @@ def _get_parameter_grid(input_size: int = 10):
     MIN_LEARNING_RATE, MAX_LEARNING_RATE = 1e-5, 1e-2
     MIN_BATCH_SIZE, MAX_BATCH_SIZE = 64, 512
     MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY = 1e-5, 1e-2
-    MIN_DROPOUT_RATE, MAX_DROPOUT_RATE = 0.0, 0.5
+    MIN_DROPOUT_RATE, MAX_DROPOUT_RATE = 0.0, 0.2
     MIN_RELU_SLOPE, MAX_RELU_SLOPE = 0.01, 0.1
 
     param_space = {
@@ -113,7 +113,9 @@ def train_pass_outcome_engine(
     probs = F.softmax(logits, dim=-1).detach().cpu().numpy()
     y_pred_classes = np.argmax(probs, axis=1)
 
-    # Evaluation Metrics
+    # Evaluation Metrics for Multiclass Classification
+    y_test_np = y_test.detach().cpu().numpy().flatten().astype(int)
+    
     ce_loss = log_loss(y_test_np, probs, labels=list(range(probs.shape[1])))
     acc = accuracy_score(y_test_np, y_pred_classes)
     macro_f1 = f1_score(y_test_np, y_pred_classes, average="macro")

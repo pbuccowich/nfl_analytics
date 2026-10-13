@@ -33,7 +33,7 @@ class PassOutcomeEngine(nn.Module):
         """Returns raw logits (use with nn.CrossEntropyLoss during training)."""
         return self.net(x)
 
-    def predict_proba(self, x: torch.Tensor, temperature: float = 1.0) -> torch.Tensor:
+    def predict_proba(self, x: torch.Tensor, temperature: float = 1.5) -> torch.Tensor:
         """Computes softmax probabilities across pass outcome categories."""
         logits = self.forward(x)
         if temperature != 1.0:
