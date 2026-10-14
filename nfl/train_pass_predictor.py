@@ -40,7 +40,7 @@ def train_pass_outcome_engine(
     num_splits: int = 5,
     data=None,
     feature_cols=None,
-    weigh_classes: bool = True,
+    weigh_classes: bool = False,
 ):
     if data is None:
         data = DataManager.get_data(
@@ -83,8 +83,8 @@ def train_pass_outcome_engine(
     y_train = y_train.long().squeeze()
     y_test_np = y_test.detach().cpu().numpy().flatten().astype(int)
 
-    weights = generate_class_weights(y_train).to(device) if weigh_classes else None
-    criterion = torch.nn.CrossEntropyLoss(weight=weights).to(device)
+    #weights = generate_class_weights(y_train).to(device) if weigh_classes else None
+    criterion = torch.nn.CrossEntropyLoss().to(device)
 
     # 1. Initialize Driver with CrossEntropyLoss
     pipeline = PipelineDriver(
