@@ -2,7 +2,12 @@ import inspect
 import numpy as np
 import optuna
 import torch
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import (
+    GroupKFold,
+    GroupShuffleSplit,
+    KFold,
+    train_test_split,
+)
 from torch.utils.tensorboard import SummaryWriter
 
 from core.trainer.ensemble import EnsembleModel
@@ -45,9 +50,16 @@ class PipelineDriver:
 
         return self.model_cls(**model_kwargs).to(self.device)
 
-    def _evaluate_kfolds(self, X, y, hparams: dict, trial=None) -> float:
+    def _kfold_indices(self, n_samples: int, groups=None):
+        """Yields (train_idx, val_idx) per fold; rows sharing a group stay together."""
+        if groups is None:
+            kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=42)
+        else:
+            kf = GroupKFold(n_splits=self.n_splits, shuffle=True, random_state=42)
+        return kf.split(np.zeros(n_samples), groups=groups)
+
+    def _evaluate_kfolds(self, X, y, hparams: dict, trial=None, groups=None) -> float:
         """Evaluates cross-validation loss across folds for hyperparameter optimization."""
-        kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=42)
         fold_losses = []
 
         # Format batch size and learning rate from hyperparameters
@@ -65,7 +77,7 @@ class PipelineDriver:
         # Ensure input dimension matches features
         in_dim = X.shape[1] if isinstance(X, (np.ndarray, torch.Tensor)) else len(X[0])
 
-        for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
+        for fold, (train_idx, val_idx) in enumerate(self._kfold_indices(len(X), groups)):
             # 1. Slice Fold Data (Slicing preserves underlying tensor/array shape)
             X_tr, X_val = X[train_idx], X[val_idx]
             y_tr, y_val = y[train_idx], y[val_idx]
@@ -100,10 +112,19 @@ class PipelineDriver:
         param_space: dict,
         n_trials: int = 30,
         holdout_ratio: float = 0.15,
+        groups=None,
     ) -> dict:
-        X_search, X_holdout, y_search, y_holdout = train_test_split(
-            X, y, test_size=holdout_ratio, random_state=42
-        )
+        if groups is None:
+            X_search, X_holdout, y_search, y_holdout = train_test_split(
+                X, y, test_size=holdout_ratio, random_state=42
+            )
+            groups_search = None
+        else:
+            splitter = GroupShuffleSplit(n_splits=1, test_size=holdout_ratio, random_state=42)
+            search_idx, holdout_idx = next(splitter.split(np.zeros(len(X)), groups=groups))
+            X_search, X_holdout = X[search_idx], X[holdout_idx]
+            y_search, y_holdout = y[search_idx], y[holdout_idx]
+            groups_search = groups[search_idx]
         X_holdout_dev, y_holdout_dev = X_holdout.to(self.device), y_holdout.to(self.device)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -124,7 +145,7 @@ class PipelineDriver:
                 elif distribution == "categorical":
                     hparams[k] = trial.suggest_categorical(k, low)
 
-            return self._evaluate_kfolds(X_search, y_search, hparams, trial=trial)
+            return self._evaluate_kfolds(X_search, y_search, hparams, trial=trial, groups=groups_search)
 
         study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler())
         study.optimize(objective, n_trials=n_trials)
@@ -174,15 +195,16 @@ class PipelineDriver:
 
         return self.best_params
 
-    def train_networks(self, X: torch.Tensor, y: torch.Tensor, save_path: str | None = None) -> EnsembleModel:
+    def train_networks(
+        self, X: torch.Tensor, y: torch.Tensor, save_path: str | None = None, groups=None
+    ) -> EnsembleModel:
         if self.best_params is None:
             raise ValueError("Must call pipeline.select_parameters() before training networks.")
 
         models = []
-        kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=42)
         X_np, y_np = X.cpu().numpy(), y.cpu().numpy()
 
-        for fold, (train_idx, val_idx) in enumerate(kf.split(X_np, y_np)):
+        for fold, (train_idx, val_idx) in enumerate(self._kfold_indices(len(X_np), groups)):
             X_tr, y_tr = torch.tensor(X_np[train_idx], device=self.device), torch.tensor(y_np[train_idx], device=self.device)
             X_val, y_val = torch.tensor(X_np[val_idx], device=self.device), torch.tensor(y_np[val_idx], device=self.device)
 

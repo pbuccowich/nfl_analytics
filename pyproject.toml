@@ -14,6 +14,7 @@ dependencies = [
     "tensorboard",
     "optuna",
     "lightgbm",
+    "scikit-learn",
 ]
 
 [project.optional-dependencies]
@@ -22,7 +23,11 @@ dev = [
     "pytest",
     "ipykernel",
     "ruff",
+    "mypy",
 ]
+
+[tool.setuptools.packages.find]
+include = ["nfl*", "core*"]
 
 [tool.ruff]
 line-length = 88

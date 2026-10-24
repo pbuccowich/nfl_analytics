@@ -56,8 +56,9 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, 
                                     feature_cols=feature_cols,
                                     target_col="wpa",
                                     train_frac = 0.95,
-                                    device=device)
-    X_train, y_train, X_test, y_test = split
+                                    device=device,
+                                    group_col="game_id")
+    X_train, y_train, X_test, y_test, groups_train = split
 
     # 1. Initialize Driver
     pipeline = PipelineDriver(
@@ -76,6 +77,7 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, 
         y=y_train,
         param_space=param_grid,
         n_trials=30,
+        groups=groups_train,
     )
 
     # 3. Train the K-model Ensemble
@@ -83,6 +85,7 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, 
         X=X_train,
         y=y_train,
         save_path="wpa_ensemble.pth",
+        groups=groups_train,
     )
 
     # 4. Predict

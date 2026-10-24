@@ -76,8 +76,9 @@ def train_pass_outcome_engine(
         train_frac=0.95,
         device=device,
         flatten_target=True,
+        group_col="game_id",
     )
-    X_train, y_train, X_test, y_test = split
+    X_train, y_train, X_test, y_test, groups_train = split
 
     # Convert targets to long integers for CrossEntropyLoss
     y_train = y_train.long().squeeze()
@@ -103,6 +104,7 @@ def train_pass_outcome_engine(
         y=y_train,
         param_space=param_grid,
         n_trials=30,
+        groups=groups_train,
     )
 
     # 3. Train the K-model Ensemble
@@ -110,6 +112,7 @@ def train_pass_outcome_engine(
         X=X_train,
         y=y_train,
         save_path="pass_outcome_ensemble.pth",
+        groups=groups_train,
     )
 
     # 4. Predict raw logits and convert to probabilities

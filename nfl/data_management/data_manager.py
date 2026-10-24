@@ -44,6 +44,7 @@ class DataManager:
 
     bool_columns = _raw_config.get("bool_columns", [])
     drop_columns = _raw_config.get("drop_columns", [])
+    keep_columns = _raw_config.get("keep_columns", [])
     yardline_columns = _raw_config.get("yardline_columns", [])
     date_columns = _raw_config.get("date_columns", [])
 
@@ -223,7 +224,8 @@ class DataManager:
         matched_columns = [
             col
             for col in df.columns
-            if any(sub in col for sub in cols_to_drop)
+            if col not in cls.keep_columns
+            and any(sub in col for sub in cols_to_drop)
         ]
         return df.drop(columns=matched_columns)
 

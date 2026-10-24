@@ -143,6 +143,9 @@ drop_columns:
 - player_name
 - player_id
 
+keep_columns:  # exempt from the substring matching in drop_columns
+- game_id
+
 yardline_columns:
 - yrdln
 - end_yard_line
