@@ -1,27 +1,26 @@
 import copy
-import pathlib
+
 import optuna
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-from torch.utils.tensorboard import SummaryWriter
 
 
 class Solver:
+    """Trains one model. Any nn.Module mapping a (batch, features) tensor to
+    predictions works; classification vs regression is inferred from the criterion.
+    """
+
     def __init__(
         self,
-        model,
+        model: nn.Module,
         device,
-        num_epochs,
-        batch_size,
-        optimizer,
-        criterion,
-        writer: SummaryWriter | None = None,
-        run_name: str | None = None,
-        hparams: dict | None = None,
-        optuna_trial=None,
+        num_epochs: int,
+        batch_size: int,
+        optimizer: torch.optim.Optimizer,
+        criterion: nn.Module,
         patience: int | None = None,
+        optuna_trial: optuna.Trial | None = None,
         optuna_step_offset: int = 0,
         optuna_warmup_epochs: int = 0,
     ):
@@ -31,128 +30,63 @@ class Solver:
         self.batch_size = int(batch_size)
         self.optimizer = optimizer
         self.criterion = criterion
-        self.writer = writer
-        self.run_name = run_name or "default_run"
-        self.hparams = hparams
-        self.optuna_trial = optuna_trial
         # Stop once validation loss hasn't improved for this many epochs (None = never)
         self.patience = patience
+        self.optuna_trial = optuna_trial
         # Pruning steps are offset per fold so a trial reports one continuous sequence
         self.optuna_step_offset = optuna_step_offset
         self.optuna_warmup_epochs = optuna_warmup_epochs
-        self.bestModel = None
-
-        # Check if loss function requires 1D integer targets (Classification)
+        self.bestModel: nn.Module | None = None
         self.is_classification = isinstance(
-            self.criterion, (nn.CrossEntropyLoss, nn.NLLLoss)
+            criterion, (nn.CrossEntropyLoss, nn.NLLLoss)
         )
 
-    def _prepare_targets(self, targets: torch.Tensor) -> torch.Tensor:
-        """Dynamically reshapes and casts targets based on criterion type."""
-        targets = targets.to(self.device)
-
+    def _dataset(self, x, y) -> TensorDataset:
+        """Classification wants (N,) long targets; regression wants (N, 1) floats."""
+        x = torch.as_tensor(x, dtype=torch.float32)
         if self.is_classification:
-            # Classification requires 1D Long Tensors: (batch_size,)
-            return targets.squeeze().long()
+            y = torch.as_tensor(y).reshape(-1).long()
         else:
-            # Regression requires 2D Float Tensors: (batch_size, 1) or matching output dim
-            return targets.view(-1, 1).float()
+            y = torch.as_tensor(y).reshape(-1, 1).float()
+        return TensorDataset(x, y)
 
-    def train(self, x, y, x_v, y_v, modelName=None, saveBest=True) -> dict:
-        # Determine target tensor type based on loss function
-        target_dtype = torch.long if self.is_classification else torch.float32
+    def _run_epoch(self, loader: DataLoader, train: bool) -> float:
+        """One pass over loader; returns the mean per-sample loss."""
+        self.model.train(train)
+        total = 0.0
+        with torch.set_grad_enabled(train):
+            for inputs, targets in loader:
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                loss = self.criterion(self.model(inputs), targets)
+                if train:
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+                total += loss.item() * inputs.size(0)
+        return total / len(loader.dataset)  # type: ignore[arg-type]
 
-        train_ds = TensorDataset(
-            (
-                x.detach().clone().to(torch.float32)
-                if isinstance(x, torch.Tensor)
-                else torch.tensor(x, dtype=torch.float32)
-            ),
-            (
-                y.detach().clone().to(target_dtype)
-                if isinstance(y, torch.Tensor)
-                else torch.tensor(y, dtype=target_dtype)
-            ),
-        )
-        valid_ds = TensorDataset(
-            (
-                x_v.detach().clone().to(torch.float32)
-                if isinstance(x_v, torch.Tensor)
-                else torch.tensor(x_v, dtype=torch.float32)
-            ),
-            (
-                y_v.detach().clone().to(target_dtype)
-                if isinstance(y_v, torch.Tensor)
-                else torch.tensor(y_v, dtype=target_dtype)
-            ),
-        )
-
+    def train(self, x, y, x_v, y_v, saveBest: bool = True) -> dict:
         train_loader = DataLoader(
-            train_ds, batch_size=self.batch_size, shuffle=True
+            self._dataset(x, y), batch_size=self.batch_size, shuffle=True
         )
-        valid_loader = DataLoader(
-            valid_ds, batch_size=self.batch_size, shuffle=False
-        )
+        valid_loader = DataLoader(self._dataset(x_v, y_v), batch_size=self.batch_size)
 
-        training_loss = np.empty(shape=(self.num_epochs,))
-        validation_loss = np.empty(shape=(self.num_epochs,))
         best_valid_loss = float("inf")
         best_epoch = 0
-
         for epoch in range(self.num_epochs):
-            # --- Training Phase ---
-            self.model.train()
-            train_running_loss = 0.0
+            train_loss = self._run_epoch(train_loader, train=True)
+            valid_loss = self._run_epoch(valid_loader, train=False)
 
-            for inputs, targets in train_loader:
-                inputs = inputs.to(self.device)
-                targets = self._prepare_targets(targets)
-
-                self.optimizer.zero_grad()
-                outputs = self.model(inputs)
-                loss = self.criterion(outputs, targets)
-                loss.backward()
-                self.optimizer.step()
-
-                train_running_loss += loss.item() * inputs.size(0)
-
-            epoch_train_loss = train_running_loss / len(train_ds)
-            training_loss[epoch] = epoch_train_loss
-
-            # --- Validation Phase ---
-            self.model.eval()
-            valid_running_loss = 0.0
-
-            with torch.no_grad():
-                for inputs, targets in valid_loader:
-                    inputs = inputs.to(self.device)
-                    targets = self._prepare_targets(targets)
-
-                    outputs = self.model(inputs)
-                    loss = self.criterion(outputs, targets)
-                    valid_running_loss += loss.item() * inputs.size(0)
-
-            epoch_valid_loss = valid_running_loss / len(valid_ds)
-            validation_loss[epoch] = epoch_valid_loss
-
-            # --- Optuna Intermediate Pruning ---
             if self.optuna_trial is not None:
-                self.optuna_trial.report(epoch_valid_loss, self.optuna_step_offset + epoch)
-                if epoch >= self.optuna_warmup_epochs and self.optuna_trial.should_prune():
+                self.optuna_trial.report(valid_loss, self.optuna_step_offset + epoch)
+                if (
+                    epoch >= self.optuna_warmup_epochs
+                    and self.optuna_trial.should_prune()
+                ):
                     raise optuna.exceptions.TrialPruned()
 
-            # --- Unified TensorBoard Logging ---
-            if self.writer:
-                self.writer.add_scalars(
-                    "Loss/Train", {self.run_name: epoch_train_loss}, epoch
-                )
-                self.writer.add_scalars(
-                    "Loss/Validation", {self.run_name: epoch_valid_loss}, epoch
-                )
-
-            # --- Model Checkpointing ---
-            if epoch_valid_loss < best_valid_loss:
-                best_valid_loss = epoch_valid_loss
+            if valid_loss < best_valid_loss:
+                best_valid_loss = valid_loss
                 best_epoch = epoch
                 if saveBest:
                     self.bestModel = copy.deepcopy(self.model)
@@ -160,12 +94,8 @@ class Solver:
             if epoch % 20 == 0 or epoch == self.num_epochs - 1:
                 print(
                     f"Epoch {epoch:>3d}/{self.num_epochs} | "
-                    f"Train Loss: {epoch_train_loss:.4f} | "
-                    f"Valid Loss: {epoch_valid_loss:.4f}"
+                    f"Train Loss: {train_loss:.4f} | Valid Loss: {valid_loss:.4f}"
                 )
-
-            if self.writer:
-                self.writer.flush()
 
             if self.patience is not None and epoch - best_epoch >= self.patience:
                 print(
@@ -174,26 +104,9 @@ class Solver:
                 )
                 break
 
-        final_train_loss = float(training_loss[epoch])
-
-        # --- TensorBoard HParams Logging ---
-        if self.writer and self.hparams:
-            self.writer.add_hparams(
-                hparam_dict=self.hparams,
-                metric_dict={
-                    "hparam/best_val_loss": float(best_valid_loss),
-                    "hparam/final_train_loss": final_train_loss,
-                },
-                run_name=self.run_name,
-            )
-
-        if modelName and self.bestModel is not None:
-            save_path = pathlib.Path(__file__).parent / f"{modelName}.pth"
-            torch.save(self.bestModel.state_dict(), save_path)
-
         return {
-            "best_val_loss": float(best_valid_loss),
-            "final_train_loss": final_train_loss,
-            "best_epoch": int(best_epoch),
+            "best_val_loss": best_valid_loss,
+            "final_train_loss": train_loss,
+            "best_epoch": best_epoch,
             "epochs_run": epoch + 1,
         }

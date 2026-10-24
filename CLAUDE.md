@@ -13,13 +13,19 @@ planned later step.
 ## Layout
 - `core/` — generic, NFL-agnostic training infrastructure. Keep it free of NFL imports.
   - `trainer/pipeline.py` `PipelineDriver`: Optuna hparam search with K-fold CV, then trains an ensemble.
+    Model-agnostic: any `model_cls(input_size=..., **model_hparams)` works (MLP now; LSTM/transformer
+    later). `batch_size`/`lr`/`weight_decay` (`TRAINING_KEYS`) go to training, everything else to the
+    model. `_make_solver` is the only place models/optimizers are built; the optimizer is the
+    `optimizer_cls` arg (default AdamW) so search and final training always match.
+    Param space values: `(low, high, dist)` tuples are searched, plain values are fixed.
   - `trainer/solver.py` `Solver`: single-model train loop; infers classification vs regression from the criterion.
+  - `models/mlp.py` `MLP`: generic feed-forward net; NFL models subclass it.
   - `trainer/ensemble.py` `EnsembleModel`: holds N models, returns (mean, std); owns save/load.
   - `utils/lib/data_handling.py`: train/test split to tensors, class weights.
 - `nfl/` — domain code.
   - `data_management/data_manager.py` `DataManager`: load CSVs, clean, map to enums, one-hot encode. `config.yaml` lists column groups.
   - `lib/constants.py` (feature column lists like `SCENARIO_COLS`, `PLAY_COLS`), `lib/nfl_enums.py`, `lib/datamodels.py`.
-  - `models/`: `WPAPredictor`, `PassOutcomeEngine`, `PassDistanceEngine` (nn.Modules).
+  - `models/`: `WPAPredictor`, `PassOutcomeEngine`, `PassDistanceEngine` (thin `MLP` subclasses that fix output size/activation).
   - `train_*_predictor.py`: entry points that wire data → `PipelineDriver` → saved ensemble.
   - `simulators/`: `PlaySimulator`, `Driver` that consume trained models.
   - `data/` (CSVs, gitignored) and `artifacts/` (`.pth`, gitignored).
@@ -35,7 +41,8 @@ Run everything from the repo root; data paths are built from `Path.cwd()`.
 - `tests/` is empty on purpose for now; tests are low priority. Don't add them unless asked.
 - Open problem: WPA predictor CV loss during hparam selection doesn't carry over to
   final ensemble training (generalization gap). Pass predictor is "ok"; class-weighted
-  loss made it worse.
+  loss made it worse. Until 2026-10-23 the search used Adam and the final ensemble AdamW,
+  so the tuned `weight_decay` meant different things in each; may explain part of the gap.
 - Measured (2021–2025 seasons, 2026-10-23): consecutive-play WPA correlation is about
   -0.02, and game_id explains under 1% of WPA variance. Within-game leakage of the
   *target* is therefore negligible. Game-state features (wp lag-1 corr about 0.75) are

@@ -51,14 +51,13 @@ class DataManager:
     @classmethod
     def get_data(cls, path_to_json: Path) -> pd.DataFrame:
         """Reads CSV files and applies base structural normalizations."""
-        all_df = pd.DataFrame()
-        path = Path(path_to_json)
-
-        for f in path.glob("*.csv"):
-            _df = pd.read_csv(
-                f, low_memory=False, parse_dates=cls.date_columns
-            )
-            all_df = pd.concat([all_df, _df], ignore_index=True)
+        all_df = pd.concat(
+            [
+                pd.read_csv(f, low_memory=False, parse_dates=cls.date_columns)
+                for f in Path(path_to_json).glob("*.csv")
+            ],
+            ignore_index=True,
+        )
 
         df = cls._normalize_to_boolean(all_df, cls.bool_columns)
         df = cls._normalize_yardlines(df, cls.yardline_columns)
@@ -198,15 +197,13 @@ class DataManager:
     @classmethod
     def _map_pass_length(cls, series: pd.Series) -> pd.Series:
         """Maps pass_length enum or string values to 1 (short), 2 (deep), or 0."""
-        def _to_int(val):
-            val_str = str(val).lower() if pd.notnull(val) else ""
-            if "short" in val_str:
-                return 1
-            elif "deep" in val_str:
-                return 2
-            return 0
-
-        return series.apply(_to_int).astype(int)
+        text = series.astype(str).str.lower()
+        return pd.Series(
+            np.select(
+                [text.str.contains("short"), text.str.contains("deep")], [1, 2], 0
+            ),
+            index=series.index,
+        )
 
     @classmethod
     def _normalize_to_boolean(

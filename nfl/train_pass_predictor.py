@@ -13,26 +13,17 @@ from nfl.lib.constants import EXCLUDED_PLAY_TYPES, PLAY_COLS, SCENARIO_COLS
 from nfl.models.play_outcome_engine import PassOutcomeEngine
 
 
-def _get_parameter_grid(input_size: int = 10):
-    MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS = 1, 20
-    MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE = input_size, input_size * 30
-    MIN_LEARNING_RATE, MAX_LEARNING_RATE = 1e-5, 1e-2
-    MIN_BATCH_SIZE, MAX_BATCH_SIZE = 64, 512
-    MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY = 1e-5, 1e-2
-    MIN_DROPOUT_RATE, MAX_DROPOUT_RATE = 0.0, 0.2
-    MIN_RELU_SLOPE, MAX_RELU_SLOPE = 0.01, 0.1
-
-    param_space = {
-        "batch_size": (MIN_BATCH_SIZE, MAX_BATCH_SIZE, "int"),
-        "lr": (MIN_LEARNING_RATE, MAX_LEARNING_RATE, "log"),
-        "num_hidden_layers": (MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS, "int"),
-        "hidden_size": (MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE, "int"),
-        "weight_decay": (MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY, "log"),
-        "dropout_rate": (MIN_DROPOUT_RATE, MAX_DROPOUT_RATE, "float"),
-        "relu_slope": (MIN_RELU_SLOPE, MAX_RELU_SLOPE, "float"),
+def _get_parameter_grid(input_size: int = 10) -> dict:
+    """(low, high, distribution) specs are searched; plain values are fixed."""
+    return {
+        "batch_size": (64, 512, "int"),
+        "lr": (1e-5, 1e-2, "log"),
+        "num_hidden_layers": (1, 20, "int"),
+        "hidden_size": (input_size, input_size * 30, "int"),
+        "weight_decay": (1e-5, 1e-2, "log"),
+        "dropout_rate": (0.0, 0.2, "float"),
+        "relu_slope": (0.01, 0.1, "float"),
     }
-
-    return param_space
 
 
 def train_pass_outcome_engine(
@@ -80,12 +71,8 @@ def train_pass_outcome_engine(
     )
     X_train, y_train, X_test, y_test, groups_train = split
 
-    # Convert targets to long integers for CrossEntropyLoss
-    y_train = y_train.long().squeeze()
-    y_test_np = y_test.detach().cpu().numpy().flatten().astype(int)
-
-    #weights = generate_class_weights(y_train).to(device) if weigh_classes else None
-    criterion = torch.nn.CrossEntropyLoss().to(device)
+    weights = generate_class_weights(y_train).to(device) if weigh_classes else None
+    criterion = torch.nn.CrossEntropyLoss(weight=weights).to(device)
 
     # 1. Initialize Driver with CrossEntropyLoss
     pipeline = PipelineDriver(
@@ -122,8 +109,8 @@ def train_pass_outcome_engine(
     y_pred_classes = np.argmax(probs, axis=1)
 
     # Evaluation Metrics for Multiclass Classification
-    y_test_np = y_test.detach().cpu().numpy().flatten().astype(int)
-    
+    y_test_np = y_test.cpu().numpy()
+
     ce_loss = log_loss(y_test_np, probs, labels=list(range(probs.shape[1])))
     acc = accuracy_score(y_test_np, y_pred_classes)
     macro_f1 = f1_score(y_test_np, y_pred_classes, average="macro")

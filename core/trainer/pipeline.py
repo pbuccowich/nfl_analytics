@@ -1,25 +1,25 @@
-import inspect
+from collections.abc import Callable
+
 import numpy as np
 import optuna
 import torch
-from sklearn.model_selection import (
-    GroupKFold,
-    GroupShuffleSplit,
-    KFold,
-    train_test_split,
-)
-from torch.utils.tensorboard import SummaryWriter
+from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 
 from core.trainer.ensemble import EnsembleModel
 
+# Hyperparameters consumed by training; every other key goes to the model constructor
+TRAINING_KEYS = {"batch_size", "lr", "weight_decay"}
 
-def _suggest_params(trial: optuna.Trial, param_space: dict, skip: dict) -> dict:
-    """Samples one value per (low, high, distribution) spec, skipping keys in skip."""
+
+def _suggest_params(trial: optuna.Trial, param_space: dict) -> dict:
+    """Samples each (low, high, distribution) spec; non-tuple values are fixed."""
     hparams = {}
-    for k, (low, high, distribution) in param_space.items():
-        if k in skip:
+    for k, spec in param_space.items():
+        if not isinstance(spec, tuple):
+            hparams[k] = spec
             continue
-        elif distribution == "int":
+        low, high, distribution = spec
+        if distribution == "int":
             hparams[k] = trial.suggest_int(k, low, high)
         elif distribution == "float":
             hparams[k] = trial.suggest_float(k, low, high)
@@ -32,7 +32,19 @@ def _suggest_params(trial: optuna.Trial, param_space: dict, skip: dict) -> dict:
     return hparams
 
 
+def _group_split(groups: np.ndarray, **sizes) -> tuple[np.ndarray, np.ndarray]:
+    """One shuffled split that keeps each group on one side."""
+    splitter = GroupShuffleSplit(n_splits=1, random_state=42, **sizes)
+    return next(splitter.split(np.zeros(len(groups)), groups=groups))
+
+
 class PipelineDriver:
+    """Optuna search with grouped K-fold CV, then a K-model ensemble.
+
+    model_cls can be any nn.Module whose constructor takes input_size plus the
+    non-training keys of the param space. Without groups, every row is its own group.
+    """
+
     def __init__(
         self,
         solver_cls,
@@ -42,38 +54,45 @@ class PipelineDriver:
         n_splits: int = 5,
         num_epochs: int = 100,
         max_delta_threshold: float = 0.15,
-        log_dir: str | None = None,
         scale_features: bool = True,
         patience: int | None = 10,
         prune_warmup_epochs: int = 5,
+        optimizer_cls: Callable[..., torch.optim.Optimizer] = torch.optim.AdamW,
     ):
         self.solver_cls = solver_cls
         self.model_cls = model_cls
         self.criterion = criterion
-        self.is_classification = isinstance(criterion, torch.nn.CrossEntropyLoss)
-        self.device = torch.device(device) if isinstance(device, str) else device
+        self.device = torch.device(device)
         self.n_splits = n_splits
         self.num_epochs = num_epochs
         self.max_delta_threshold = max_delta_threshold
-        self.log_dir = log_dir
         self.scale_features = scale_features
         self.patience = patience
         self.prune_warmup_epochs = prune_warmup_epochs
+        self.optimizer_cls = optimizer_cls
 
         self.best_params: dict | None = None
         self.best_cv_loss: float | None = None
 
-    def _instantiate_model(self, input_size: int, hparams: dict) -> torch.nn.Module:
-        """Dynamically filters hparams to match model_cls signature."""
-        sig = inspect.signature(self.model_cls.__init__)
-        accepted_args = set(sig.parameters.keys()) - {"self"}
-
-        model_kwargs = {"input_size": input_size}
-        for k, v in hparams.items():
-            if k in accepted_args:
-                model_kwargs[k] = type(v)(v)
-
-        return self.model_cls(**model_kwargs).to(self.device)
+    def _make_solver(self, hparams: dict, input_size: int, **solver_kwargs):
+        """The single place models, optimizers and solvers are built."""
+        model_kwargs = {k: v for k, v in hparams.items() if k not in TRAINING_KEYS}
+        model = self.model_cls(input_size=input_size, **model_kwargs).to(self.device)
+        optimizer = self.optimizer_cls(
+            model.parameters(),
+            lr=float(hparams.get("lr", 1e-3)),
+            weight_decay=float(hparams.get("weight_decay", 0.0)),
+        )
+        return self.solver_cls(
+            model=model,
+            device=self.device,
+            num_epochs=self.num_epochs,
+            batch_size=int(hparams.get("batch_size", 128)),
+            optimizer=optimizer,
+            criterion=self.criterion,
+            patience=self.patience,
+            **solver_kwargs,
+        )
 
     def _fit_scaler(self, X: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor] | None:
         """Per-feature mean/std of X, or None when scaling is off."""
@@ -92,63 +111,26 @@ class PipelineDriver:
         mean, std = scaler
         return (X - mean.to(X.device)) / std.to(X.device)
 
-    def _kfold_indices(self, n_samples: int, groups=None):
+    def _kfold_indices(self, groups: np.ndarray):
         """Yields (train_idx, val_idx) per fold; rows sharing a group stay together."""
-        if groups is None:
-            kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=42)
-        else:
-            kf = GroupKFold(n_splits=self.n_splits, shuffle=True, random_state=42)
-        return kf.split(np.zeros(n_samples), groups=groups)
+        kf = GroupKFold(n_splits=self.n_splits, shuffle=True, random_state=42)
+        return kf.split(np.zeros(len(groups)), groups=groups)
 
-    def _evaluate_kfolds(self, X, y, hparams: dict, trial=None, groups=None) -> float:
-        """Evaluates cross-validation loss across folds for hyperparameter optimization."""
+    def _evaluate_kfolds(self, X, y, hparams: dict, groups: np.ndarray, trial) -> float:
+        """Mean best validation loss across folds; pruning can stop it in any fold."""
         fold_losses = []
-
-        # Format batch size and learning rate from hyperparameters
-        batch_size = int(hparams.get("batch_size", 128))
-        lr = float(hparams.get("lr", 1e-3))
-        weight_decay = float(hparams.get("weight_decay", 0.0))
-
-        # Convert non-model kwargs to model-specific kwargs
-        model_kwargs = {
-            k: v
-            for k, v in hparams.items()
-            if k not in {"batch_size", "lr", "weight_decay"}
-        }
-
-        # Ensure input dimension matches features
-        in_dim = X.shape[1] if isinstance(X, (np.ndarray, torch.Tensor)) else len(X[0])
-
-        for fold, (train_idx, val_idx) in enumerate(self._kfold_indices(len(X), groups)):
-            # 1. Slice Fold Data (Slicing preserves underlying tensor/array shape)
-            X_tr, X_val = X[train_idx], X[val_idx]
-            y_tr, y_val = y[train_idx], y[val_idx]
-
-            # 2. Instantiate Model and Optimizer for Current Fold
-            model = self.model_cls(input_size=in_dim, **model_kwargs).to(self.device)
-            optimizer = torch.optim.Adam(
-                model.parameters(), lr=lr, weight_decay=weight_decay
-            )
-
-            # 3. Instantiate Solver
-            solver = self.solver_cls(
-                model=model,
-                device=self.device,
-                num_epochs=self.num_epochs,
-                batch_size=batch_size,
-                optimizer=optimizer,
-                criterion=self.criterion,
-                patience=self.patience,
-                # Prune in every fold; a bad fold ends the trial before later folds run
+        for fold, (train_idx, val_idx) in enumerate(self._kfold_indices(groups)):
+            solver = self._make_solver(
+                hparams,
+                X.shape[1],
                 optuna_trial=trial,
                 optuna_step_offset=fold * self.num_epochs,
                 optuna_warmup_epochs=self.prune_warmup_epochs,
             )
-
-            # 4. Train Fold Model (saveBest=False to prevent writing fold checkpoints)
-            metrics = solver.train(X_tr, y_tr, X_val, y_val, saveBest=False)
+            metrics = solver.train(
+                X[train_idx], y[train_idx], X[val_idx], y[val_idx], saveBest=False
+            )
             fold_losses.append(metrics["best_val_loss"])
-
         return float(np.mean(fold_losses))
 
     def select_parameters(
@@ -164,52 +146,29 @@ class PipelineDriver:
     ) -> dict:
         """Optuna search with K-fold CV, then a holdout check of the best params.
 
-        search_frac: fraction of the non-holdout data (whole groups when given)
-            used for the search, to speed it up. The final ensemble still trains
-            on everything via train_networks.
+        search_frac: fraction of the non-holdout groups used for the search, to speed
+            it up. The final ensemble still trains on everything via train_networks.
         """
-        if groups is None:
-            X_search, X_holdout, y_search, y_holdout = train_test_split(
-                X, y, test_size=holdout_ratio, random_state=42
-            )
-            groups_search = None
-        else:
-            splitter = GroupShuffleSplit(n_splits=1, test_size=holdout_ratio, random_state=42)
-            search_idx, holdout_idx = next(splitter.split(np.zeros(len(X)), groups=groups))
-            X_search, X_holdout = X[search_idx], X[holdout_idx]
-            y_search, y_holdout = y[search_idx], y[holdout_idx]
-            groups_search = groups[search_idx]
-
+        groups = np.arange(len(X)) if groups is None else np.asarray(groups)
+        search_idx, holdout_idx = _group_split(groups, test_size=holdout_ratio)
         if search_frac < 1.0:
-            if groups_search is None:
-                sample_idx, _ = train_test_split(
-                    np.arange(len(X_search)), train_size=search_frac, random_state=42
-                )
-            else:
-                splitter = GroupShuffleSplit(n_splits=1, train_size=search_frac, random_state=42)
-                sample_idx, _ = next(splitter.split(np.zeros(len(X_search)), groups=groups_search))
-                groups_search = groups_search[sample_idx]
-            X_search, y_search = X_search[sample_idx], y_search[sample_idx]
+            sample_idx, _ = _group_split(groups[search_idx], train_size=search_frac)
+            search_idx = search_idx[sample_idx]
+        groups_search = groups[search_idx]
 
         # Fit scaling on the search split only so the holdout check stays honest
-        scaler = self._fit_scaler(X_search)
-        X_search = self._apply_scaler(X_search, scaler)
-        X_holdout = self._apply_scaler(X_holdout, scaler)
-        X_holdout_dev, y_holdout_dev = X_holdout.to(self.device), y_holdout.to(self.device)
-
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-        # A bool spec with low == high is a fixed value, not a search dimension
-        fixed_params = {
-            k: spec[0]
-            for k, spec in param_space.items()
-            if spec[2] == "bool" and spec[0] == spec[1]
-        }
+        scaler = self._fit_scaler(X[search_idx])
+        X_search = self._apply_scaler(X[search_idx], scaler)
+        X_holdout = self._apply_scaler(X[holdout_idx], scaler)
+        y_search, y_holdout = y[search_idx], y[holdout_idx]
 
         def objective(trial: optuna.Trial) -> float:
-            hparams = {**fixed_params, **_suggest_params(trial, param_space, fixed_params)}
-            return self._evaluate_kfolds(X_search, y_search, hparams, trial=trial, groups=groups_search)
+            hparams = _suggest_params(trial, param_space)
+            return self._evaluate_kfolds(
+                X_search, y_search, hparams, groups_search, trial
+            )
 
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
         if pruner is None:
             # Warmup is handled per fold in Solver (prune_warmup_epochs)
             pruner = optuna.pruners.MedianPruner(n_startup_trials=3)
@@ -218,108 +177,63 @@ class PipelineDriver:
         )
         study.optimize(objective, n_trials=n_trials)
 
-        self.best_params = {**fixed_params, **study.best_trial.params}
+        fixed = {k: v for k, v in param_space.items() if not isinstance(v, tuple)}
+        self.best_params = {**fixed, **study.best_trial.params}
         self.best_cv_loss = study.best_value
+        n_pruned = sum(t.state == optuna.trial.TrialState.PRUNED for t in study.trials)
+        print(f"{n_pruned}/{len(study.trials)} trials pruned")
+        print(self.best_params)
 
-        # Verification step dynamically built
-        temp_model = self._instantiate_model(X.shape[1], self.best_params)
-
-        optimizer = torch.optim.Adam(
-            temp_model.parameters(),
-            lr=float(self.best_params["lr"]),
-            weight_decay=float(self.best_params.get("weight_decay", 0.0)),
-        )
-
-        solver = self.solver_cls(
-            model=temp_model,
-            device=self.device,
-            num_epochs=self.num_epochs,
-            batch_size=int(self.best_params["batch_size"]),
-            optimizer=optimizer,
-            criterion=self.criterion,
-            patience=self.patience,
-        )
-
-        solver.train(X_search, y_search, X_holdout_dev, y_holdout_dev, saveBest=True)
-
-        temp_model.eval()
-        with torch.no_grad():
-            preds = temp_model(X_holdout_dev)
-            if self.is_classification:
-                target_eval = y_holdout_dev.squeeze().long()
-            else:
-                target_eval = y_holdout_dev.view(-1, 1).float()
-                
-            holdout_loss = self.criterion(preds, target_eval).item()
-
+        # Backstop: retrain on the search split and compare holdout loss to CV loss.
+        # Both use the best epoch's validation loss, so they're comparable.
+        solver = self._make_solver(self.best_params, X.shape[1])
+        metrics = solver.train(X_search, y_search, X_holdout, y_holdout, saveBest=False)
+        holdout_loss = metrics["best_val_loss"]
         delta = (holdout_loss - self.best_cv_loss) / self.best_cv_loss
+        print(f"CV loss {self.best_cv_loss:.6f} | holdout loss {holdout_loss:.6f}")
 
         if delta > self.max_delta_threshold:
             raise RuntimeError(
                 f"Execution Halted: Validation delta ({delta:+.2%}) exceeded threshold "
                 f"({self.max_delta_threshold:.2%}). Search space produced overfitted parameters."
             )
-
-        n_pruned = sum(t.state == optuna.trial.TrialState.PRUNED for t in study.trials)
-        print(f"{n_pruned}/{len(study.trials)} trials pruned")
-        print(self.best_params)
-
         return self.best_params
 
     def train_networks(
-        self, X: torch.Tensor, y: torch.Tensor, save_path: str | None = None, groups=None
+        self,
+        X: torch.Tensor,
+        y: torch.Tensor,
+        save_path: str | None = None,
+        groups=None,
     ) -> EnsembleModel:
         if self.best_params is None:
-            raise ValueError("Must call pipeline.select_parameters() before training networks.")
+            raise ValueError(
+                "Must call pipeline.select_parameters() before training networks."
+            )
+
+        groups = np.arange(len(X)) if groups is None else np.asarray(groups)
+        scaler = self._fit_scaler(X)
+        X_scaled = self._apply_scaler(X, scaler)
 
         models = []
-        scaler = self._fit_scaler(X)
-        X_np, y_np = self._apply_scaler(X, scaler).cpu().numpy(), y.cpu().numpy()
-
-        for fold, (train_idx, val_idx) in enumerate(self._kfold_indices(len(X_np), groups)):
-            X_tr, y_tr = torch.tensor(X_np[train_idx], device=self.device), torch.tensor(y_np[train_idx], device=self.device)
-            X_val, y_val = torch.tensor(X_np[val_idx], device=self.device), torch.tensor(y_np[val_idx], device=self.device)
-
-            model = self._instantiate_model(X.shape[1], self.best_params)
-
-            optimizer = torch.optim.AdamW(
-                model.parameters(),
-                lr=float(self.best_params["lr"]),
-                weight_decay=float(self.best_params.get("weight_decay", 0.0)),
+        for train_idx, val_idx in self._kfold_indices(groups):
+            solver = self._make_solver(self.best_params, X.shape[1])
+            solver.train(
+                X_scaled[train_idx],
+                y[train_idx],
+                X_scaled[val_idx],
+                y[val_idx],
+                saveBest=True,
             )
+            models.append(solver.bestModel or solver.model)
 
-            writer = SummaryWriter(f"{self.log_dir}/fold_{fold}") if self.log_dir else None
-
-            solver = self.solver_cls(
-                model=model,
-                device=self.device,
-                num_epochs=self.num_epochs,
-                batch_size=int(self.best_params["batch_size"]),
-                optimizer=optimizer,
-                criterion=self.criterion,
-                patience=self.patience,
-            )
-
-            metrics = solver.train(X_tr, y_tr, X_val, y_val, saveBest=True)
-
-            if writer:
-                writer.add_scalar("Loss/val", metrics["best_val_loss"], fold)
-                writer.close()
-
-            models.append(solver.bestModel if solver.bestModel else model)
-
-        best_config = {
-            "input_size": X.shape[1],
-            **self.best_params,
-        }
         feature_mean, feature_std = scaler if scaler is not None else (None, None)
         ensemble = EnsembleModel(
             models,
-            config=best_config,
+            config={"input_size": X.shape[1], **self.best_params},
             feature_mean=feature_mean,
             feature_std=feature_std,
         ).to(self.device)
         if save_path:
             ensemble.save(save_path)
-
         return ensemble

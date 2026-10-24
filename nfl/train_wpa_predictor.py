@@ -11,27 +11,19 @@ from nfl.lib.constants import EXCLUDED_PLAY_TYPES, PLAY_COLS, SCENARIO_COLS
 from nfl.models.wpa_predictor import WPAPredictor
 
 
-def _get_parameter_grid(input_size: int = 10):
-    MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS = 1, 20
-    MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE = input_size, input_size*5
-    MIN_LEARNING_RATE, MAX_LEARNING_RATE = 1e-5, 1e-2
-    MIN_BATCH_SIZE, MAX_BATCH_SIZE = 64, 512
-    MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY = 1e-5, 1e-1
-    MIN_DROPOUT_RATE, MAX_DROPOUT_RATE = 0.05, 0.25
-    MIN_RELU_SLOPE, MAX_RELU_SLOPE = 0.01, 0.1
-
-    param_space = {
-        "batch_size": (MIN_BATCH_SIZE, MAX_BATCH_SIZE, "int"),
-        "lr": (MIN_LEARNING_RATE, MAX_LEARNING_RATE, "log"),
-        "num_hidden_layers": (MIN_HIDDEN_LAYERS, MAX_HIDDEN_LAYERS, "int"),
-        "hidden_size": (MIN_HIDDEN_SIZE, MAX_HIDDEN_SIZE, "int"),
-        "weight_decay": (MIN_WEIGHT_DECAY, MAX_WEIGHT_DECAY, "log"),
-        "dropout_rate": (MIN_DROPOUT_RATE, MAX_DROPOUT_RATE, "float"),
-        "use_tanh_output": (False, False, "bool"),
-        "relu_slope": (MIN_RELU_SLOPE, MAX_RELU_SLOPE, "float")
+def _get_parameter_grid(input_size: int = 10) -> dict:
+    """(low, high, distribution) specs are searched; plain values are fixed."""
+    return {
+        "batch_size": (64, 512, "int"),
+        "lr": (1e-5, 1e-2, "log"),
+        "num_hidden_layers": (1, 20, "int"),
+        "hidden_size": (input_size, input_size * 5, "int"),
+        "weight_decay": (1e-5, 1e-1, "log"),
+        "dropout_rate": (0.05, 0.25, "float"),
+        "relu_slope": (0.01, 0.1, "float"),
+        "use_tanh_output": False,
     }
 
-    return param_space
 
 def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, feature_cols = None):
     if data is None:
