@@ -13,6 +13,25 @@ from torch.utils.tensorboard import SummaryWriter
 from core.trainer.ensemble import EnsembleModel
 
 
+def _suggest_params(trial: optuna.Trial, param_space: dict, skip: dict) -> dict:
+    """Samples one value per (low, high, distribution) spec, skipping keys in skip."""
+    hparams = {}
+    for k, (low, high, distribution) in param_space.items():
+        if k in skip:
+            continue
+        elif distribution == "int":
+            hparams[k] = trial.suggest_int(k, low, high)
+        elif distribution == "float":
+            hparams[k] = trial.suggest_float(k, low, high)
+        elif distribution == "log":
+            hparams[k] = trial.suggest_float(k, low, high, log=True)
+        elif distribution == "bool":
+            hparams[k] = trial.suggest_categorical(k, [True, False])
+        elif distribution == "categorical":
+            hparams[k] = trial.suggest_categorical(k, low)
+    return hparams
+
+
 class PipelineDriver:
     def __init__(
         self,
@@ -24,6 +43,9 @@ class PipelineDriver:
         num_epochs: int = 100,
         max_delta_threshold: float = 0.15,
         log_dir: str | None = None,
+        scale_features: bool = True,
+        patience: int | None = 10,
+        prune_warmup_epochs: int = 5,
     ):
         self.solver_cls = solver_cls
         self.model_cls = model_cls
@@ -34,6 +56,9 @@ class PipelineDriver:
         self.num_epochs = num_epochs
         self.max_delta_threshold = max_delta_threshold
         self.log_dir = log_dir
+        self.scale_features = scale_features
+        self.patience = patience
+        self.prune_warmup_epochs = prune_warmup_epochs
 
         self.best_params: dict | None = None
         self.best_cv_loss: float | None = None
@@ -49,6 +74,23 @@ class PipelineDriver:
                 model_kwargs[k] = type(v)(v)
 
         return self.model_cls(**model_kwargs).to(self.device)
+
+    def _fit_scaler(self, X: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor] | None:
+        """Per-feature mean/std of X, or None when scaling is off."""
+        if not self.scale_features:
+            return None
+        X = X.float()
+        mean = X.mean(dim=0)
+        std = X.std(dim=0)
+        std[std < 1e-8] = 1.0  # constant columns pass through unscaled
+        return mean, std
+
+    @staticmethod
+    def _apply_scaler(X: torch.Tensor, scaler) -> torch.Tensor:
+        if scaler is None:
+            return X
+        mean, std = scaler
+        return (X - mean.to(X.device)) / std.to(X.device)
 
     def _kfold_indices(self, n_samples: int, groups=None):
         """Yields (train_idx, val_idx) per fold; rows sharing a group stay together."""
@@ -96,7 +138,11 @@ class PipelineDriver:
                 batch_size=batch_size,
                 optimizer=optimizer,
                 criterion=self.criterion,
-                optuna_trial=trial if fold == 0 else None,  # Prune early on fold 0
+                patience=self.patience,
+                # Prune in every fold; a bad fold ends the trial before later folds run
+                optuna_trial=trial,
+                optuna_step_offset=fold * self.num_epochs,
+                optuna_warmup_epochs=self.prune_warmup_epochs,
             )
 
             # 4. Train Fold Model (saveBest=False to prevent writing fold checkpoints)
@@ -113,7 +159,15 @@ class PipelineDriver:
         n_trials: int = 30,
         holdout_ratio: float = 0.15,
         groups=None,
+        search_frac: float = 1.0,
+        pruner: optuna.pruners.BasePruner | None = None,
     ) -> dict:
+        """Optuna search with K-fold CV, then a holdout check of the best params.
+
+        search_frac: fraction of the non-holdout data (whole groups when given)
+            used for the search, to speed it up. The final ensemble still trains
+            on everything via train_networks.
+        """
         if groups is None:
             X_search, X_holdout, y_search, y_holdout = train_test_split(
                 X, y, test_size=holdout_ratio, random_state=42
@@ -125,32 +179,46 @@ class PipelineDriver:
             X_search, X_holdout = X[search_idx], X[holdout_idx]
             y_search, y_holdout = y[search_idx], y[holdout_idx]
             groups_search = groups[search_idx]
+
+        if search_frac < 1.0:
+            if groups_search is None:
+                sample_idx, _ = train_test_split(
+                    np.arange(len(X_search)), train_size=search_frac, random_state=42
+                )
+            else:
+                splitter = GroupShuffleSplit(n_splits=1, train_size=search_frac, random_state=42)
+                sample_idx, _ = next(splitter.split(np.zeros(len(X_search)), groups=groups_search))
+                groups_search = groups_search[sample_idx]
+            X_search, y_search = X_search[sample_idx], y_search[sample_idx]
+
+        # Fit scaling on the search split only so the holdout check stays honest
+        scaler = self._fit_scaler(X_search)
+        X_search = self._apply_scaler(X_search, scaler)
+        X_holdout = self._apply_scaler(X_holdout, scaler)
         X_holdout_dev, y_holdout_dev = X_holdout.to(self.device), y_holdout.to(self.device)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-        def objective(trial: optuna.Trial) -> float:
-            hparams = {}
-            for k, spec in param_space.items():
-                low, high, distribution = spec[0], spec[1], spec[2]
-                
-                if distribution == "int":
-                    hparams[k] = trial.suggest_int(k, low, high)
-                elif distribution == "float":
-                    hparams[k] = trial.suggest_float(k, low, high)
-                elif distribution == "log":
-                    hparams[k] = trial.suggest_float(k, low, high, log=True)
-                elif distribution == "bool":
-                    hparams[k] = trial.suggest_categorical(k, [True, False])
-                elif distribution == "categorical":
-                    hparams[k] = trial.suggest_categorical(k, low)
+        # A bool spec with low == high is a fixed value, not a search dimension
+        fixed_params = {
+            k: spec[0]
+            for k, spec in param_space.items()
+            if spec[2] == "bool" and spec[0] == spec[1]
+        }
 
+        def objective(trial: optuna.Trial) -> float:
+            hparams = {**fixed_params, **_suggest_params(trial, param_space, fixed_params)}
             return self._evaluate_kfolds(X_search, y_search, hparams, trial=trial, groups=groups_search)
 
-        study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler())
+        if pruner is None:
+            # Warmup is handled per fold in Solver (prune_warmup_epochs)
+            pruner = optuna.pruners.MedianPruner(n_startup_trials=3)
+        study = optuna.create_study(
+            direction="minimize", sampler=optuna.samplers.TPESampler(), pruner=pruner
+        )
         study.optimize(objective, n_trials=n_trials)
 
-        self.best_params = study.best_trial.params
+        self.best_params = {**fixed_params, **study.best_trial.params}
         self.best_cv_loss = study.best_value
 
         # Verification step dynamically built
@@ -169,6 +237,7 @@ class PipelineDriver:
             batch_size=int(self.best_params["batch_size"]),
             optimizer=optimizer,
             criterion=self.criterion,
+            patience=self.patience,
         )
 
         solver.train(X_search, y_search, X_holdout_dev, y_holdout_dev, saveBest=True)
@@ -191,6 +260,8 @@ class PipelineDriver:
                 f"({self.max_delta_threshold:.2%}). Search space produced overfitted parameters."
             )
 
+        n_pruned = sum(t.state == optuna.trial.TrialState.PRUNED for t in study.trials)
+        print(f"{n_pruned}/{len(study.trials)} trials pruned")
         print(self.best_params)
 
         return self.best_params
@@ -202,7 +273,8 @@ class PipelineDriver:
             raise ValueError("Must call pipeline.select_parameters() before training networks.")
 
         models = []
-        X_np, y_np = X.cpu().numpy(), y.cpu().numpy()
+        scaler = self._fit_scaler(X)
+        X_np, y_np = self._apply_scaler(X, scaler).cpu().numpy(), y.cpu().numpy()
 
         for fold, (train_idx, val_idx) in enumerate(self._kfold_indices(len(X_np), groups)):
             X_tr, y_tr = torch.tensor(X_np[train_idx], device=self.device), torch.tensor(y_np[train_idx], device=self.device)
@@ -225,6 +297,7 @@ class PipelineDriver:
                 batch_size=int(self.best_params["batch_size"]),
                 optimizer=optimizer,
                 criterion=self.criterion,
+                patience=self.patience,
             )
 
             metrics = solver.train(X_tr, y_tr, X_val, y_val, saveBest=True)
@@ -239,7 +312,13 @@ class PipelineDriver:
             "input_size": X.shape[1],
             **self.best_params,
         }
-        ensemble = EnsembleModel(models, config=best_config)
+        feature_mean, feature_std = scaler if scaler is not None else (None, None)
+        ensemble = EnsembleModel(
+            models,
+            config=best_config,
+            feature_mean=feature_mean,
+            feature_std=feature_std,
+        ).to(self.device)
         if save_path:
             ensemble.save(save_path)
 

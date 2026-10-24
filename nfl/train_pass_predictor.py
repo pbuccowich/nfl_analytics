@@ -105,6 +105,7 @@ def train_pass_outcome_engine(
         param_space=param_grid,
         n_trials=30,
         groups=groups_train,
+        search_frac=0.3,
     )
 
     # 3. Train the K-model Ensemble

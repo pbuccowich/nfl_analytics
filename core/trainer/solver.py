@@ -21,6 +21,9 @@ class Solver:
         run_name: str | None = None,
         hparams: dict | None = None,
         optuna_trial=None,
+        patience: int | None = None,
+        optuna_step_offset: int = 0,
+        optuna_warmup_epochs: int = 0,
     ):
         self.model = model
         self.device = device
@@ -32,6 +35,11 @@ class Solver:
         self.run_name = run_name or "default_run"
         self.hparams = hparams
         self.optuna_trial = optuna_trial
+        # Stop once validation loss hasn't improved for this many epochs (None = never)
+        self.patience = patience
+        # Pruning steps are offset per fold so a trial reports one continuous sequence
+        self.optuna_step_offset = optuna_step_offset
+        self.optuna_warmup_epochs = optuna_warmup_epochs
         self.bestModel = None
 
         # Check if loss function requires 1D integer targets (Classification)
@@ -129,8 +137,8 @@ class Solver:
 
             # --- Optuna Intermediate Pruning ---
             if self.optuna_trial is not None:
-                self.optuna_trial.report(epoch_valid_loss, epoch)
-                if self.optuna_trial.should_prune():
+                self.optuna_trial.report(epoch_valid_loss, self.optuna_step_offset + epoch)
+                if epoch >= self.optuna_warmup_epochs and self.optuna_trial.should_prune():
                     raise optuna.exceptions.TrialPruned()
 
             # --- Unified TensorBoard Logging ---
@@ -159,7 +167,14 @@ class Solver:
             if self.writer:
                 self.writer.flush()
 
-        final_train_loss = float(training_loss[-1])
+            if self.patience is not None and epoch - best_epoch >= self.patience:
+                print(
+                    f"Early stop at epoch {epoch} (best {best_epoch}) | "
+                    f"Valid Loss: {best_valid_loss:.4f}"
+                )
+                break
+
+        final_train_loss = float(training_loss[epoch])
 
         # --- TensorBoard HParams Logging ---
         if self.writer and self.hparams:
@@ -180,4 +195,5 @@ class Solver:
             "best_val_loss": float(best_valid_loss),
             "final_train_loss": final_train_loss,
             "best_epoch": int(best_epoch),
+            "epochs_run": epoch + 1,
         }

@@ -42,6 +42,12 @@ Run everything from the repo root; data paths are built from `Path.cwd()`.
   correlated within a game, so all splits are grouped by `game_id` (pass `group_col` /
   `groups` through `create_train_test_split` and `PipelineDriver`). `game_id` survives
   the substring-based `drop_columns` only because it is listed in `keep_columns`.
+- Feature scaling lives in `PipelineDriver` (`scale_features=True`) and the fitted
+  mean/std are stored as `EnsembleModel` buffers, so callers always pass raw features.
+  Preliminary check (2023–25, 15 epochs): unscaled models collapsed to predicting a
+  constant (test MSE equal to the predict-0 baseline of 0.00207); scaled reached 0.00196
+  (about 5% better). tanh made no difference once inputs were scaled. Per-play WPA is
+  mostly outcome noise, so expect a low R²; the model's job is the expected WPA.
 
 ## Working conventions
 - Training runs can be long. Prefer small `num_epoch` / `n_trials` smoke runs to check

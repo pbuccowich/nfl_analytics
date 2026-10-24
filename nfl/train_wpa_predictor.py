@@ -78,6 +78,7 @@ def train_wpa_predictor(num_epoch: int = 100, num_splits: int = 5, data = None, 
         param_space=param_grid,
         n_trials=30,
         groups=groups_train,
+        search_frac=0.3,
     )
 
     # 3. Train the K-model Ensemble

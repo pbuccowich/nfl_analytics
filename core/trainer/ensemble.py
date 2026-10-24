@@ -8,15 +8,25 @@ import torch.nn as nn
 class EnsembleModel(nn.Module):
 
     def __init__(
-        self, models: list[nn.Module], config: dict | None = None
+        self,
+        models: list[nn.Module],
+        config: dict | None = None,
+        feature_mean: torch.Tensor | None = None,
+        feature_std: torch.Tensor | None = None,
     ) -> None:
         super().__init__()
         self.models = nn.ModuleList(models)
         self.config = config or {}
+        # Scaling stats from the training data; saved in the state_dict so callers
+        # can pass raw features. None for unscaled (older) ensembles.
+        self.register_buffer("feature_mean", feature_mean)
+        self.register_buffer("feature_std", feature_std)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         self.eval()
         with torch.no_grad():
+            if self.feature_mean is not None:
+                x = (x - self.feature_mean) / self.feature_std
             preds = torch.stack([model(x) for model in self.models], dim=0)
             mean_pred = torch.mean(preds, dim=0)
             std_pred = torch.std(preds, dim=0)
@@ -58,6 +68,12 @@ class EnsembleModel(nn.Module):
         # Reconstruct base models safely
         base_models = [model_cls(**model_kwargs) for _ in range(num_models)]
 
-        ensemble = cls(base_models, config=config)
-        ensemble.load_state_dict(checkpoint["state_dict"])
+        state_dict = checkpoint["state_dict"]
+        ensemble = cls(
+            base_models,
+            config=config,
+            feature_mean=state_dict.get("feature_mean"),
+            feature_std=state_dict.get("feature_std"),
+        )
+        ensemble.load_state_dict(state_dict)
         return ensemble
