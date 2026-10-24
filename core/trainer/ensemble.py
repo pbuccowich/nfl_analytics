@@ -6,6 +6,9 @@ import torch.nn as nn
 
 
 class EnsembleModel(nn.Module):
+    # Declared so type checkers know these buffers are tensors, not Modules
+    feature_mean: torch.Tensor | None
+    feature_std: torch.Tensor | None
 
     def __init__(
         self,
@@ -25,7 +28,7 @@ class EnsembleModel(nn.Module):
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         self.eval()
         with torch.no_grad():
-            if self.feature_mean is not None:
+            if self.feature_mean is not None and self.feature_std is not None:
                 x = (x - self.feature_mean) / self.feature_std
             preds = torch.stack([model(x) for model in self.models], dim=0)
             mean_pred = torch.mean(preds, dim=0)

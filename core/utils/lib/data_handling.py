@@ -14,7 +14,7 @@ def create_train_test_split(
     group_col: str | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray | None]:
     """
-    Splits DataFrame into scaled PyTorch train and test tensors.
+    Splits DataFrame into PyTorch train and test tensors (unscaled; PipelineDriver scales).
 
     Args:
         df: Input DataFrame containing features and targets.
@@ -45,11 +45,6 @@ def create_train_test_split(
         X_train_raw, X_test_raw = X[train_idx], X[test_idx]
         y_train_raw, y_test_raw = y[train_idx], y[test_idx]
         groups_train = groups[train_idx]
-
-    # Scale features
-#    scaler = StandardScaler()
-#    X_train_scaled = scaler.fit_transform(X_train_raw)
-#    X_test_scaled = scaler.transform(X_test_raw)
 
     # Convert features to float tensors
     X_train = torch.tensor(X_train_raw, dtype=torch.float32, device=device)
