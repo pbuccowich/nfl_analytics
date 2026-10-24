@@ -1,6 +1,4 @@
-from dataclasses import dataclass
-
-import torch
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -14,39 +12,45 @@ class PenaltySpec:
     automatic_first_down: bool = False
     enabled: bool = True
 
+
 @dataclass(frozen=True)
 class Defensive_PenaltySpec(PenaltySpec):
     on_offense: bool = False
     on_defense: bool = True
+
 
 @dataclass(frozen=True)
 class Offensive_PenaltySpec(PenaltySpec):
     on_offense: bool = True
     on_defense: bool = False
 
+
 @dataclass(frozen=True)
 class Personal_FoulSpec(PenaltySpec):
     penalty_distance: int = 15
     assessed_after_play: bool = True
 
+
 @dataclass
 class Scenario:
-    yardline: float
-    seconds_remaining: float
-    has_turf: bool | int
-    temp: float
-    wind: float
-    hs_roof: bool | int
-    yds_to_go: bool | int
-    score_to_go: float
-    goal_differential: float
-    down: int
-    div_game: bool | int
-    day_of_season: int
-    series: int
+    """Game state before a play; field names match SCENARIO_COLS in the data."""
 
-    def to_tensor(self):
-        return torch.tensor([self.yardline, self.seconds_remaining, self.has_turf, self.temp, self.wind, self.has_roof, self.yds_to_go, self.goal_to_go, self.score_differential, self.down, self.div_game, self.day_of_season, self.series], dtype=torch.float32)
+    yardline_100: float
+    game_seconds_remaining: float
+    down: int
+    ydstogo: float
+    goal_to_go: bool
+    score_differential: float
+    series: int = 1
+    div_game: bool = False
+    temp: float = 60.0
+    wind: float = 5.0
+    day_of_season: int = 60
+    has_roof: bool = False
+    has_turf: bool = False
+
+    def to_dict(self) -> dict[str, float]:
+        return {k: float(v) for k, v in asdict(self).items()}
 
 
 @dataclass

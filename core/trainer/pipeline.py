@@ -205,7 +205,10 @@ class PipelineDriver:
         y: torch.Tensor,
         save_path: str | None = None,
         groups=None,
+        feature_names: list[str] | None = None,
     ) -> EnsembleModel:
+        """feature_names (the column order of X) is saved in the ensemble's config so
+        inference code can build inputs in the same order."""
         if self.best_params is None:
             raise ValueError(
                 "Must call pipeline.select_parameters() before training networks."
@@ -230,7 +233,11 @@ class PipelineDriver:
         feature_mean, feature_std = scaler if scaler is not None else (None, None)
         ensemble = EnsembleModel(
             models,
-            config={"input_size": X.shape[1], **self.best_params},
+            config={
+                "input_size": X.shape[1],
+                "feature_names": feature_names,
+                **self.best_params,
+            },
             feature_mean=feature_mean,
             feature_std=feature_std,
         ).to(self.device)

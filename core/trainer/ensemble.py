@@ -79,4 +79,6 @@ class EnsembleModel(nn.Module):
             feature_std=state_dict.get("feature_std"),
         )
         ensemble.load_state_dict(state_dict)
-        return ensemble
+        # Base models are built on CPU while the scaler buffers keep their saved
+        # device, so move everything to one place
+        return ensemble.to(map_location or "cpu")

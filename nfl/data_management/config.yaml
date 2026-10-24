@@ -145,6 +145,8 @@ drop_columns:
 
 keep_columns:  # exempt from the substring matching in drop_columns
 - game_id
+- pass_location
+- run_location
 
 yardline_columns:
 - yrdln
