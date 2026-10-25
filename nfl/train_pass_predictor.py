@@ -186,6 +186,15 @@ def train_pass_yards_engine(
     data, feature_cols = _prepare_pass_data(data, feature_cols)
     data, outcome_cols = DataManager.create_pass_yards_targets(data)
     feature_cols = feature_cols + outcome_cols
+    n_bins = PASS_YARDS_RANGE[1] - PASS_YARDS_RANGE[0] + 1
+    # The pipeline passes one target column to the loss, so pack the bin and the
+    # censoring flags into one integer the loss unpacks
+    data["pass_yards_target"] = CensoredCrossEntropyLoss.encode(
+        data["pass_yards_bin"],
+        data["pass_yards_at_least"],
+        data["pass_yards_at_most"],
+        n_bins,
+    )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using {device} device")
@@ -203,9 +212,7 @@ def train_pass_yards_engine(
     pipeline = PipelineDriver(
         solver_cls=Solver,
         model_cls=PassDistanceEngine,
-        criterion=CensoredCrossEntropyLoss(
-            PASS_YARDS_RANGE[1] - PASS_YARDS_RANGE[0] + 1
-        ),
+        criterion=CensoredCrossEntropyLoss(n_bins),
         device=device,
         n_splits=num_splits,
         num_epochs=num_epoch,
