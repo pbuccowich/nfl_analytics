@@ -5,8 +5,8 @@ play-by-play data (1999+), not to ship anything. Explaining *why* something work
 fails is as valuable as the fix.
 
 Long-term goal: play-calling models (scenario → play) that go head to head inside a
-game simulator. The simulator is built from learned outcome models; penalties and pass
-outcomes exist so far. Plays are currently treated as independent. Sequence models
+game simulator. The simulator is built from learned outcome models; penalties, pass and
+run outcomes exist so far. Plays are currently treated as independent. Sequence models
 (LSTM/transformer over a game) that can judge whether a strategy is working are a
 planned later step.
 
@@ -25,7 +25,7 @@ planned later step.
 - `nfl/` — domain code.
   - `data_management/data_manager.py` `DataManager`: load CSVs, clean, map to enums, one-hot encode. `config.yaml` lists column groups.
   - `lib/constants.py` (feature column lists like `SCENARIO_COLS`, `PLAY_COLS`), `lib/nfl_enums.py`, `lib/datamodels.py`.
-  - `models/`: `WPAPredictor`, `PassOutcomeEngine`, `PassDistanceEngine`, `PreSnapPenaltyEngine`/`LiveBallPenaltyEngine` (thin `MLP` subclasses that fix output size/activation).
+  - `models/`: `WPAPredictor`, `PassOutcomeEngine`, `PassDistanceEngine`, `RunOutcomeEngine`, `PreSnapPenaltyEngine`/`LiveBallPenaltyEngine` (thin `MLP` subclasses that fix output size/activation).
   - `train_*_predictor.py`: entry points that wire data → `PipelineDriver` → saved ensemble.
   - `simulators/`: `PlaySimulator`, `Driver` that consume trained models.
     `play_caller.py`: `PlayCall` (pre-snap choices), `all_play_calls()` (55 valid calls),
@@ -87,7 +87,7 @@ Run everything from the repo root; data paths are built from `Path.cwd()`.
   down with no penalty (the simulator applies penalties separately; two-point tries are
   the only pass/run plays with no down). `PassOutcome.SCRAMBLE` exists because
   scrambles used to fall through to INCOMPLETE. `PassDistanceEngine` outputs logits
-  over yard bins `PASS_YARDS_RANGE` (-30..99) for complete/scramble/sack, with the
+  over yard bins `YARDS_RANGE` (-30..99) for complete/scramble/sack, with the
   outcome one-hot as input. Touchdowns and safeties are censored: the data records a
   TD as exactly `yardline_100` yards though the play would have gone farther, so
   targets say "at least"/"at most" and `core/trainer/losses.py`
@@ -97,6 +97,13 @@ Run everything from the repo root; data paths are built from `Path.cwd()`.
   this (2026-10-25) completions got P(TD) 3.5% vs 6.9% actual. Judge both models by cross-entropy against the
   class-frequency baseline (and CRPS for yards), not accuracy: the simulator samples
   probabilities. Old pass-outcome accuracy (~64%) predates the sack-leak fix.
+- Run model (2026-10-25, `train_run_predictor.py`): `RunOutcomeEngine` is one softmax
+  over the `YARDS_RANGE` bins plus a last "fumble lost" class (no outcome model like
+  passes: a run ends down somewhere or with the ball lost). `select_run_plays` uses
+  the pass rules (no penalty, real down); scrambles are passes. Same censored loss,
+  with `n_ordered=N_BINS` so a TD bound never covers the fumble class, and the same
+  `fold_field_ends`. `sample_run` returns yards 0 on a lost fumble (median spot is
+  the line of scrimmage). 2023-25: TD on 3.5% of runs, lost fumble on 0.67%.
 - Penalty engines (2026-10-24, `train_penalty_predictor.py`, replaced the never-trained
   per-type LightGBM `PenaltyPredictor`). The data records at most one penalty per play
   (2+ flags on 0.35% of penalty plays, offsetting 0.03%), so each engine is one softmax

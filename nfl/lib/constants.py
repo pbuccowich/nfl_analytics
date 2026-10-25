@@ -57,9 +57,10 @@ RESULT_COLS = [
     "penalty_yards",
 ]
 
-# Yards gained on pass plays are predicted as a distribution over these whole-yard
-# bins (inclusive). The data's extremes are a 30-yard sack and a 99-yard catch.
-PASS_YARDS_RANGE = (-30, 99)
+# Yards gained on passes and runs are predicted as a distribution over these
+# whole-yard bins (inclusive). The data's extremes are a 30-yard sack and a 99-yard
+# catch; rarer bigger losses are censored as "at most -30".
+YARDS_RANGE = (-30, 99)
 
 # Pass outcomes that end with the ball carrier down somewhere, so they need yards
 PASS_YARDS_OUTCOMES = [

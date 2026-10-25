@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import torch
 
 
 def class_rates(
@@ -48,3 +49,14 @@ def reliability(prob: np.ndarray, hit: np.ndarray, n_bins: int = 5) -> pd.DataFr
         )
         .round(2)
     )
+
+
+def crps(probs, bins):
+    """Continuous ranked probability score of a distribution over ordered bins,
+    per row: the squared gap between the predicted CDF and the actual outcome's
+    step CDF, summed over bins. Unlike cross-entropy it gives credit for being
+    close to the right bin. Works on tensors; lower is better.
+    """
+    idx = torch.arange(probs.shape[1], device=probs.device)
+    step = (idx >= bins.unsqueeze(1)).float()
+    return ((probs.cumsum(dim=1) - step) ** 2).sum(dim=1)

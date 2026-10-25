@@ -8,8 +8,8 @@ from nfl.lib import nfl_enums as enums
 from nfl.lib.constants import (
     CATEGORICAL_PLAY_COLS,
     PASS_YARDS_OUTCOMES,
-    PASS_YARDS_RANGE,
     PENALTY_ENUM_MAPPING,
+    YARDS_RANGE,
 )
 
 DATA_MAP = {
@@ -180,7 +180,7 @@ class DataManager:
 
         Needs create_pass_outcome_targets first. The outcome is an input to the yards
         model (one-hot). Adds pass_yards_bin (yards - low, clipped to
-        PASS_YARDS_RANGE) and two flags for yards that are only a bound:
+        YARDS_RANGE) and two flags for yards that are only a bound:
         pass_yards_at_least for touchdowns (the play stops at the goal line, so it
         might have gone farther) and pass_yards_at_most for safeties and losses past
         the range. Returns the frame and the outcome feature columns.
@@ -192,7 +192,7 @@ class DataManager:
         for col, outcome in zip(outcome_cols, outcomes):
             df[col] = (df["pass_outcome_str"] == outcome).astype(float)
 
-        low, high = PASS_YARDS_RANGE
+        low, high = YARDS_RANGE
         yards = df["yards_gained"].round()
         df["pass_yards_bin"] = yards.clip(low, high).astype(int) - low
         df["pass_yards_at_least"] = (yards >= df["yardline_100"]).astype(int)
@@ -200,6 +200,39 @@ class DataManager:
             (yards <= df["yardline_100"] - 100) | (yards < low)
         ).astype(int)
         return df, outcome_cols
+
+    @classmethod
+    def select_run_plays(cls, df: pd.DataFrame) -> pd.DataFrame:
+        """Designed runs on a regular down with no penalty, cleaned (NaN filled).
+
+        Same rules as select_pass_plays. Scrambles aren't here: clean_data makes
+        every dropback a pass call. Kneels are their own play type.
+        """
+        return df[
+            (df["play_type"] == enums.PlayType.RUN)
+            & (df["penalty"] == 0)
+            & (df["down"] >= 1)
+        ]
+
+    @classmethod
+    def create_run_targets(cls, df: pd.DataFrame, fumble_class: int) -> pd.DataFrame:
+        """Adds run_class (yards - low, clipped to YARDS_RANGE, or fumble_class for a
+        lost fumble) and the same bound flags as create_pass_yards_targets:
+        run_yards_at_least for touchdowns, run_yards_at_most for safeties and losses
+        past the range. A lost fumble has no yards, so neither flag is set on it.
+        """
+        df = df.copy()
+        low, high = YARDS_RANGE
+        yards = df["yards_gained"].round()
+        lost = df["fumble_lost"] == 1
+        df["run_class"] = (yards.clip(low, high).astype(int) - low).where(
+            ~lost, fumble_class
+        )
+        df["run_yards_at_least"] = ((yards >= df["yardline_100"]) & ~lost).astype(int)
+        df["run_yards_at_most"] = (
+            ((yards <= df["yardline_100"] - 100) | (yards < low)) & ~lost
+        ).astype(int)
+        return df
 
     @classmethod
     def create_penalty_targets(

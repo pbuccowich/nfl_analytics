@@ -9,15 +9,15 @@ from sklearn.metrics import accuracy_score, f1_score, log_loss
 from core.trainer.losses import CensoredCrossEntropyLoss
 from core.trainer.pipeline import PipelineDriver
 from core.trainer.solver import Solver
-from core.utils.lib.calibration import class_rates, reliability
+from core.utils.lib.calibration import class_rates, crps, reliability
 from core.utils.lib.data_handling import create_train_test_split, generate_class_weights
 from nfl.data_management.data_manager import DataManager
 from nfl.lib.constants import (
     EXCLUDED_PLAY_TYPES,
     PASS_YARDS_OUTCOMES,
-    PASS_YARDS_RANGE,
     PLAY_COLS,
     SCENARIO_COLS,
+    YARDS_RANGE,
 )
 from nfl.lib.nfl_enums import PassOutcome
 from nfl.models.play_outcome_engine import PassDistanceEngine, PassOutcomeEngine
@@ -186,7 +186,7 @@ def train_pass_yards_engine(
     data, feature_cols = _prepare_pass_data(data, feature_cols)
     data, outcome_cols = DataManager.create_pass_yards_targets(data)
     feature_cols = feature_cols + outcome_cols
-    n_bins = PASS_YARDS_RANGE[1] - PASS_YARDS_RANGE[0] + 1
+    n_bins = YARDS_RANGE[1] - YARDS_RANGE[0] + 1
     # The pipeline passes one target column to the loss, so pack the bin and the
     # censoring flags into one integer the loss unpacks
     data["pass_yards_target"] = CensoredCrossEntropyLoss.encode(
@@ -246,12 +246,10 @@ def _report_yards_metrics(
     """Held-out test metrics, against a baseline that predicts each outcome's yards
     histogram from the train split (so it knows the outcome but not the situation).
     Both get the same field ends, and CE is the censored training loss."""
-    n_bins = PASS_YARDS_RANGE[1] - PASS_YARDS_RANGE[0] + 1
+    n_bins = YARDS_RANGE[1] - YARDS_RANGE[0] + 1
     criterion = CensoredCrossEntropyLoss(n_bins)
     train_bins, test_bins = y_train % n_bins, y_test % n_bins
-    yards = torch.arange(
-        PASS_YARDS_RANGE[0], PASS_YARDS_RANGE[1] + 1, device=X_test.device
-    )
+    yards = torch.arange(YARDS_RANGE[0], YARDS_RANGE[1] + 1, device=X_test.device)
     yardline = X_test[:, feature_cols.index("yardline_100")]
     outcome_idx = [feature_cols.index(c) for c in outcome_cols]
     test_outcome = X_test[:, outcome_idx].argmax(dim=1)
@@ -273,13 +271,10 @@ def _report_yards_metrics(
     def scores(logits, probs, mask):
         p, y = probs[mask], test_bins[mask]
         ce = criterion(logits[mask], y_test[mask])
-        # CRPS: squared gap between predicted and actual CDFs, summed over yards.
-        # Unlike cross-entropy it gives credit for being close to the right yard.
-        step = (torch.arange(n_bins, device=y.device) >= y.unsqueeze(1)).float()
-        crps = ((p.cumsum(dim=1) - step) ** 2).sum(dim=1).mean()
+        crps_mean = crps(p, y).mean()
         mean_yards = (p * yards).sum(dim=1).mean()
-        p_td = p[torch.arange(len(y)), yardline[mask].long() - PASS_YARDS_RANGE[0]]
-        return ce.item(), crps.item(), mean_yards.item(), p_td.mean().item()
+        p_td = p[torch.arange(len(y)), yardline[mask].long() - YARDS_RANGE[0]]
+        return ce.item(), crps_mean.item(), mean_yards.item(), p_td.mean().item()
 
     print(
         f"{'outcome':<10}{'n':>7}  {'CE model/base':>15}  {'CRPS model/base':>17}"
