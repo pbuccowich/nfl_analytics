@@ -14,7 +14,16 @@ SCENARIO_COLS = [
     "div_game",
     "day_of_season",
     "series",
+    # A number, so nearby seasons look alike and a new season needs no new column
+    "season",
+    # Franchises (one-hot below), so the models can learn team strengths
+    "posteam",
+    "defteam",
 ]
+
+# Every model trains on the seasons before this one and is tested on it, like a
+# coach entering a new season
+TEST_SEASON = 2025
 
 PLAY_COLS = [
     "play_type",
@@ -29,9 +38,11 @@ PLAY_COLS = [
     "qb_spike",
 ]
 
-# Categorical play columns, one-hot encoded against these fixed categories so the
+# Categorical columns, one-hot encoded against these fixed categories so the
 # feature columns never depend on which values happen to be in the data
-CATEGORICAL_PLAY_COLS = {
+CATEGORICAL_COLS = {
+    "posteam": [t.value for t in enums.NFLTeam],
+    "defteam": [t.value for t in enums.NFLTeam],
     "play_type": [p.value for p in enums.PlayType],
     # Pass and run directions share the same left/middle/right values
     "pass_location": [d.value for d in enums.RunLocations],

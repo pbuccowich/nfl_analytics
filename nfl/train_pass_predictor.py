@@ -17,6 +17,7 @@ from nfl.lib.constants import (
     PASS_YARDS_OUTCOMES,
     PLAY_COLS,
     SCENARIO_COLS,
+    TEST_SEASON,
     YARDS_RANGE,
 )
 from nfl.lib.nfl_enums import PassOutcome
@@ -80,7 +81,7 @@ def train_pass_outcome_engine(
         df=data,
         feature_cols=feature_cols,
         target_col="pass_outcome_target",
-        train_frac=0.95,
+        test_mask=(data["season"] == TEST_SEASON).to_numpy(),
         device=device,
         flatten_target=True,
         group_col="game_id",
@@ -203,7 +204,7 @@ def train_pass_yards_engine(
         df=data,
         feature_cols=feature_cols,
         target_col="pass_yards_target",
-        train_frac=0.95,
+        test_mask=(data["season"] == TEST_SEASON).to_numpy(),
         device=device,
         flatten_target=True,
         group_col="game_id",

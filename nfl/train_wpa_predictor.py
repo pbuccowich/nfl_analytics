@@ -7,16 +7,26 @@ from core.trainer.pipeline import PipelineDriver
 from core.trainer.solver import Solver
 from core.utils.lib.data_handling import create_train_test_split
 from nfl.data_management.data_manager import DataManager
-from nfl.lib.constants import EXCLUDED_PLAY_TYPES, PLAY_COLS, SCENARIO_COLS
-from nfl.models.wpa_predictor import WPAPredictor
+from nfl.lib.constants import (
+    EXCLUDED_PLAY_TYPES,
+    PLAY_COLS,
+    SCENARIO_COLS,
+    TEST_SEASON,
+)
+from nfl.models.wpa_predictor import ResidualWPAPredictor, WPAPredictor
 
 
-def _get_parameter_grid(input_size: int = 10) -> dict:
-    """(low, high, distribution) specs are searched; plain values are fixed."""
+def _get_parameter_grid(input_size: int = 10, residual: bool = False) -> dict:
+    """(low, high, distribution) specs are searched; plain values are fixed.
+
+    The residual model searches blocks over the same range as the plain model's
+    layers, so you can see whether it picks deeper when depth is easy to train.
+    """
+    depth_key = "num_blocks" if residual else "num_hidden_layers"
     return {
         "batch_size": (64, 512, "int"),
         "lr": (1e-5, 1e-2, "log"),
-        "num_hidden_layers": (1, 20, "int"),
+        depth_key: (1, 20, "int"),
         "hidden_size": (input_size, input_size * 5, "int"),
         "weight_decay": (1e-5, 1e-1, "log"),
         "dropout_rate": (0.05, 0.25, "float"),
@@ -26,8 +36,21 @@ def _get_parameter_grid(input_size: int = 10) -> dict:
 
 
 def train_wpa_predictor(
-    num_epoch: int = 100, num_splits: int = 5, data=None, feature_cols=None
+    num_epoch: int = 100,
+    num_splits: int = 5,
+    data=None,
+    feature_cols=None,
+    residual: bool = False,
+    n_trials: int = 30,
 ):
+    """Trains the plain MLP WPA ensemble, or with residual=True the ResidualMLP one
+    (saved separately, so the two can be compared on the same 2025 test split)."""
+    model_cls = ResidualWPAPredictor if residual else WPAPredictor
+    save_path = (
+        "nfl/artifacts/residual_wpa_ensemble.pth"
+        if residual
+        else "nfl/artifacts/wpa_ensemble.pth"
+    )
     if data is None:
         data = DataManager.get_data(
             path_to_json=(Path.cwd() / "nfl/data").resolve()
@@ -45,12 +68,12 @@ def train_wpa_predictor(
     print("Cuda device count: ", torch.cuda.device_count())
     print(f"Using {device} device")
 
-    param_grid = _get_parameter_grid(input_size=len(feature_cols))
+    param_grid = _get_parameter_grid(input_size=len(feature_cols), residual=residual)
     split = create_train_test_split(
         df=data,
         feature_cols=feature_cols,
         target_col="wpa",
-        train_frac=0.95,
+        test_mask=(data["season"] == TEST_SEASON).to_numpy(),
         device=device,
         group_col="game_id",
     )
@@ -59,7 +82,7 @@ def train_wpa_predictor(
     # 1. Initialize Driver
     pipeline = PipelineDriver(
         solver_cls=Solver,
-        model_cls=WPAPredictor,
+        model_cls=model_cls,
         criterion=torch.nn.MSELoss().to(device),
         device=device,
         n_splits=num_splits,
@@ -72,7 +95,7 @@ def train_wpa_predictor(
         X=X_train,
         y=y_train,
         param_space=param_grid,
-        n_trials=30,
+        n_trials=n_trials,
         groups=groups_train,
         search_frac=0.3,
     )
@@ -81,7 +104,7 @@ def train_wpa_predictor(
     ensemble = pipeline.train_networks(
         X=X_train,
         y=y_train,
-        save_path="nfl/artifacts/wpa_ensemble.pth",
+        save_path=save_path,
         groups=groups_train,
         feature_names=feature_cols,
     )
@@ -101,6 +124,9 @@ def train_wpa_predictor(
     # Note: Add small epsilon to denominator to avoid division by zero if target has exact zeros
     mape = np.mean(np.abs((y_true - y_pred) / np.maximum(np.abs(y_true), 1e-8))) * 100
 
+    print(f"{model_cls.__name__}, held-out {TEST_SEASON} season:")
+    mse, mse_zero = np.mean((y_true - y_pred) ** 2), np.mean(y_true**2)
+    print(f"MSE:  {mse:.6f} (predict 0: {mse_zero:.6f})")
     print(f"MAE:  {mae:.4f}")
     print(f"RMSE: {rmse:.4f}")
     print(f"MAPE: {mape:.2f}%")

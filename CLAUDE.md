@@ -20,6 +20,7 @@ planned later step.
     Param space values: `(low, high, dist)` tuples are searched, plain values are fixed.
   - `trainer/solver.py` `Solver`: single-model train loop; infers classification vs regression from the criterion.
   - `models/mlp.py` `MLP`: generic feed-forward net; NFL models subclass it.
+  - `models/residual_mlp.py` `ResidualMLP`: pre-norm residual blocks (x + f(x)), blocks and head zero-initialized so a fresh net predicts 0 and deep stacks start as identity. `ResidualWPAPredictor` (`train_wpa_predictor(residual=True)`, saved to `residual_wpa_ensemble.pth`) compares it with the plain MLP.
   - `trainer/ensemble.py` `EnsembleModel`: holds N models, returns (mean, std); owns save/load.
   - `utils/lib/data_handling.py`: train/test split to tensors, class weights.
 - `nfl/` — domain code.
@@ -61,7 +62,7 @@ Run everything from the repo root; data paths are built from `Path.cwd()`.
   mostly outcome noise, so expect a low R²; the model's job is the expected WPA.
 
 - Categorical play columns (`play_type`, `pass_location`, `run_location`) are one-hot
-  encoded against fixed categories (`CATEGORICAL_PLAY_COLS`), so feature columns don't
+  encoded against fixed categories (`CATEGORICAL_COLS`), so feature columns don't
   depend on the data. Checkpoints from before 2026-10-24 use the old 27 features and
   have no `feature_names`, so they can't drive `WPAPlayCaller`; retrain.
 - Play-caller findings (2026-10-24, quick model, 2023–25):
@@ -118,6 +119,14 @@ Run everything from the repo root; data paths are built from `Path.cwd()`.
   wiped-out plays; `create_penalty_targets` builds the labels. 2023-25: pre-snap foul
   on 2.8% of snaps, live-ball foul on 5.5% of snapped plays; DPI 0.75% of short vs 3.6%
   of deep passes. Enforcement (which yards, replay down, accept/decline) isn't built.
+
+- Season and teams (2026-10-25): `SCENARIO_COLS` includes `season` (a number, so
+  it can extrapolate one season ahead) and `posteam`/`defteam` (one-hot over the 32
+  franchises; nflfastR codes are already franchise-based, e.g. the Rams are `LA` in
+  1999). Every trainer tests on `TEST_SEASON` (2025) and trains on earlier seasons
+  (`create_train_test_split(test_mask=...)`), so metrics from before this aren't
+  comparable. `Scenario` defaults to season 2025 and no teams (all-zero one-hot,
+  never seen in training). Checkpoints from before this lack these features; retrain.
 
 ## Working conventions
 - Training runs can be long. Prefer small `num_epoch` / `n_trials` smoke runs to check

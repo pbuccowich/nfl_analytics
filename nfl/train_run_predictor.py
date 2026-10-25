@@ -12,6 +12,7 @@ from nfl.lib.constants import (
     EXCLUDED_PLAY_TYPES,
     PLAY_COLS,
     SCENARIO_COLS,
+    TEST_SEASON,
     YARDS_RANGE,
 )
 from nfl.models.play_outcome_engine import RunOutcomeEngine
@@ -59,7 +60,7 @@ def train_run_engine(
         df=data,
         feature_cols=feature_cols,
         target_col="run_target",
-        train_frac=0.95,
+        test_mask=(data["season"] == TEST_SEASON).to_numpy(),
         device=device,
         flatten_target=True,
         group_col="game_id",

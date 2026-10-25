@@ -48,9 +48,18 @@ class Scenario:
     day_of_season: int = 60
     has_roof: bool = False
     has_turf: bool = False
+    # The models never trained on TEST_SEASON (2025), so it's the season to play in.
+    # A team of None encodes as no franchise at all (all-zero one-hot), which the
+    # models never saw in training; pass real teams for meaningful predictions.
+    season: int = 2025
+    posteam: str | None = None
+    defteam: str | None = None
 
-    def to_dict(self) -> dict[str, float]:
-        return {k: float(v) for k, v in asdict(self).items()}
+    def to_dict(self) -> dict[str, float | str | None]:
+        return {
+            k: v if v is None or isinstance(v, str) else float(v)
+            for k, v in asdict(self).items()
+        }
 
 
 @dataclass

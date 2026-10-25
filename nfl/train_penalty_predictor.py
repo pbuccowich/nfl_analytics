@@ -12,6 +12,7 @@ from nfl.lib.constants import (
     PLAY_COLS,
     PRE_SNAP_PENALTIES,
     SCENARIO_COLS,
+    TEST_SEASON,
 )
 from nfl.models.penalty_engine import (
     LiveBallPenaltyEngine,
@@ -20,7 +21,7 @@ from nfl.models.penalty_engine import (
 )
 
 # No play runs on a pre-snap foul, so formation is all we know about the call
-PRE_SNAP_FEATURES = SCENARIO_COLS + ["shotgun", "no_huddle"]
+PRE_SNAP_PLAY_COLS = ["shotgun", "no_huddle"]
 
 
 def _get_parameter_grid(input_size: int = 10) -> dict:
@@ -57,10 +58,13 @@ def train_penalty_engines(
     )
     data = DataManager.clean_data(data, target_col="penalty")
 
+    pre_snap_data, pre_snap_cols = DataManager.one_hot_encode_play_types(
+        data, scenario_columns=SCENARIO_COLS, play_columns=PRE_SNAP_PLAY_COLS
+    )
     pre_snap = _train_engine(
         PreSnapPenaltyEngine,
-        data,
-        PRE_SNAP_FEATURES,
+        pre_snap_data,
+        pre_snap_cols,
         "pre_snap_penalty_target",
         "nfl/artifacts/pre_snap_penalty_ensemble.pth",
         num_epoch,
@@ -102,7 +106,7 @@ def _train_engine(
         df=data,
         feature_cols=feature_cols,
         target_col=target_col,
-        train_frac=0.95,
+        test_mask=(data["season"] == TEST_SEASON).to_numpy(),
         device=device,
         flatten_target=True,
         group_col="game_id",

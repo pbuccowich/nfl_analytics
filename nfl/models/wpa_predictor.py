@@ -1,6 +1,7 @@
 import torch.nn as nn
 
 from core.models.mlp import MLP
+from core.models.residual_mlp import ResidualMLP
 
 
 class WPAPredictor(MLP):
@@ -19,6 +20,29 @@ class WPAPredictor(MLP):
             output_size=1,
             hidden_size=hidden_size,
             num_hidden_layers=num_hidden_layers,
+            dropout_rate=dropout_rate,
+            relu_slope=relu_slope,
+            output_activation=nn.Tanh() if use_tanh_output else None,
+        )
+
+
+class ResidualWPAPredictor(ResidualMLP):
+    """WPAPredictor built from residual blocks, to compare against the plain MLP."""
+
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int = 128,
+        num_blocks: int = 2,
+        dropout_rate: float = 0.1,
+        relu_slope: float = 0.01,
+        use_tanh_output: bool = False,
+    ):
+        super().__init__(
+            input_size,
+            output_size=1,
+            hidden_size=hidden_size,
+            num_blocks=num_blocks,
             dropout_rate=dropout_rate,
             relu_slope=relu_slope,
             output_activation=nn.Tanh() if use_tanh_output else None,

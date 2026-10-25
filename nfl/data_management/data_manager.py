@@ -6,7 +6,7 @@ import yaml
 
 from nfl.lib import nfl_enums as enums
 from nfl.lib.constants import (
-    CATEGORICAL_PLAY_COLS,
+    CATEGORICAL_COLS,
     PASS_YARDS_OUTCOMES,
     PENALTY_ENUM_MAPPING,
     YARDS_RANGE,
@@ -297,32 +297,30 @@ class DataManager:
         scenario_columns: list[str],
         play_columns: list[str],
     ) -> tuple[pd.DataFrame, list[str]]:
-        """Encodes categorical features and outputs final feature set columns."""
+        """One-hot encodes the requested categorical columns and returns the frame
+        and the feature columns: the requested columns, with each categorical one
+        replaced by its one-hot columns."""
         df = df.copy()
+        requested = [c for c in scenario_columns + play_columns if c in df.columns]
 
         # One-hot encode against fixed categories (e.g. play_type_pass); values outside
-        # them, like a missing location, encode as all zeros
-        categorical = [c for c in CATEGORICAL_PLAY_COLS if c in df.columns]
+        # them, like a missing location or team, encode as all zeros
+        categorical = [c for c in requested if c in CATEGORICAL_COLS]
         for col in categorical:
-            df[col] = pd.Categorical(df[col], categories=CATEGORICAL_PLAY_COLS[col])
+            df[col] = pd.Categorical(df[col], categories=CATEGORICAL_COLS[col])
         df = pd.get_dummies(df, columns=categorical, dtype=float)
 
-        # Assemble target feature columns
-        epa_feature_columns = [
-            col
-            for col in df.columns
-            if (
-                col in scenario_columns
-                or col in play_columns
-                or any(col.startswith(f"{c}_") for c in CATEGORICAL_PLAY_COLS)
-            )
-            and col != "play_type_nfl"
-        ]
+        feature_columns = []
+        for col in requested:
+            if col in categorical:
+                feature_columns += [f"{col}_{v}" for v in CATEGORICAL_COLS[col]]
+            else:
+                feature_columns.append(col)
 
         # Convert feature subset to numeric & apply zero-fill safeguard
-        df[epa_feature_columns] = df[epa_feature_columns].astype(float).fillna(0.0)
+        df[feature_columns] = df[feature_columns].astype(float).fillna(0.0)
 
-        return df, epa_feature_columns
+        return df, feature_columns
 
     # --- Internal Helper Methods ---
 
