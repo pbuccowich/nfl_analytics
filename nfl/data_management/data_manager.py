@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from core.trainer.losses import CensoredCrossEntropyLoss
 from nfl.lib import nfl_enums as enums
 from nfl.lib.constants import (
     CATEGORICAL_PLAY_COLS,
@@ -179,7 +180,9 @@ class DataManager:
         """Keeps plays whose outcome needs yards and bins yards_gained.
 
         Needs create_pass_outcome_targets first. The outcome is an input to the yards
-        model (one-hot), and pass_yards_target is the bin index of yards_gained.
+        model (one-hot), and pass_yards_target is a CensoredCrossEntropyLoss target:
+        a touchdown means "at least this far" (the play ends at the goal line), and a
+        safety or a loss past PASS_YARDS_RANGE means "at most this far".
         Returns the frame and the outcome feature columns.
         """
         outcomes = [o.value for o in PASS_YARDS_OUTCOMES]
@@ -190,8 +193,12 @@ class DataManager:
             df[col] = (df["pass_outcome_str"] == outcome).astype(float)
 
         low, high = PASS_YARDS_RANGE
-        df["pass_yards_target"] = (
-            df["yards_gained"].clip(low, high).round().astype(int) - low
+        yards = df["yards_gained"].round()
+        df["pass_yards_target"] = CensoredCrossEntropyLoss.encode(
+            bins=yards.clip(low, high).astype(int) - low,
+            at_least=(yards >= df["yardline_100"]).astype(int),
+            at_most=((yards <= df["yardline_100"] - 100) | (yards < low)).astype(int),
+            n_bins=high - low + 1,
         )
         return df, outcome_cols
 

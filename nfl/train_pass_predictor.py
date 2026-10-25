@@ -1,12 +1,15 @@
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, f1_score, log_loss
 
+from core.trainer.losses import CensoredCrossEntropyLoss
 from core.trainer.pipeline import PipelineDriver
 from core.trainer.solver import Solver
+from core.utils.lib.calibration import class_rates, reliability
 from core.utils.lib.data_handling import create_train_test_split, generate_class_weights
 from nfl.data_management.data_manager import DataManager
 from nfl.lib.constants import (
@@ -16,6 +19,7 @@ from nfl.lib.constants import (
     PLAY_COLS,
     SCENARIO_COLS,
 )
+from nfl.lib.nfl_enums import PassOutcome
 from nfl.models.play_outcome_engine import PassDistanceEngine, PassOutcomeEngine
 
 
@@ -128,11 +132,43 @@ def train_pass_outcome_engine(
     acc = accuracy_score(y_test_np, y_pred_classes)
     macro_f1 = f1_score(y_test_np, y_pred_classes, average="macro")
 
-    print(f"Cross-Entropy Loss: {ce_loss:.4f}")
+    prior = np.bincount(y_train.cpu().numpy(), minlength=probs.shape[1])
+    prior_ce = log_loss(y_test_np, np.tile(prior / prior.sum(), (len(y_test_np), 1)))
+
+    print(f"Cross-Entropy Loss: {ce_loss:.4f} (class frequencies: {prior_ce:.4f})")
     print(f"Accuracy:           {acc * 100:.2f}%")
     print(f"Macro F1 Score:     {macro_f1:.4f}")
+    report_outcome_calibration(probs, y_test_np, X_test.cpu().numpy(), feature_cols)
 
     return ce_loss, ensemble
+
+
+def report_outcome_calibration(probs, y, X, feature_cols) -> None:
+    """Checks the predicted distribution, not just the loss: the simulator samples
+    from these probabilities, so they should match actual rates overall, within
+    situations, and across the model's own confidence levels. Inputs are numpy;
+    X is raw (unscaled) features."""
+    names = [o.value for o in PassOutcome]
+    with pd.option_context("display.width", 200, "display.max_columns", 30):
+        print("\nPredicted vs actual % per outcome, overall:")
+        print(class_rates(probs, y, names).to_string(index=False))
+
+        shown = [
+            f"{n} {k}"
+            for n in ("complete", "sack", "interception")
+            for k in ("pred", "act")
+        ]
+        depth = X[:, feature_cols.index("pass_length")]
+        print("\nBy called depth (1 short, 2 deep):")
+        print(class_rates(probs, y, names, groups=depth)[["n", *shown]])
+        down = X[:, feature_cols.index("down")]
+        print("\nBy down:")
+        print(class_rates(probs, y, names, groups=down)[["n", *shown]])
+
+        for outcome in ("complete", "sack", "interception"):
+            i = names.index(outcome)
+            print(f"\nReliability, {outcome} (rows bucketed by predicted P):")
+            print(reliability(probs[:, i], y == i))
 
 
 def train_pass_yards_engine(
@@ -167,7 +203,9 @@ def train_pass_yards_engine(
     pipeline = PipelineDriver(
         solver_cls=Solver,
         model_cls=PassDistanceEngine,
-        criterion=torch.nn.CrossEntropyLoss().to(device),
+        criterion=CensoredCrossEntropyLoss(
+            PASS_YARDS_RANGE[1] - PASS_YARDS_RANGE[0] + 1
+        ),
         device=device,
         n_splits=num_splits,
         num_epochs=num_epoch,
@@ -200,8 +238,10 @@ def _report_yards_metrics(
 ) -> float:
     """Held-out test metrics, against a baseline that predicts each outcome's yards
     histogram from the train split (so it knows the outcome but not the situation).
-    Both get the same field mask, so the comparison is fair."""
+    Both get the same field ends, and CE is the censored training loss."""
     n_bins = PASS_YARDS_RANGE[1] - PASS_YARDS_RANGE[0] + 1
+    criterion = CensoredCrossEntropyLoss(n_bins)
+    train_bins, test_bins = y_train % n_bins, y_test % n_bins
     yards = torch.arange(
         PASS_YARDS_RANGE[0], PASS_YARDS_RANGE[1] + 1, device=X_test.device
     )
@@ -216,15 +256,16 @@ def _report_yards_metrics(
     # Half-count smoothing so bins never seen in train don't get zero probability
     hist = torch.stack(
         [
-            torch.bincount(y_train[train_outcome == i], minlength=n_bins) + 0.5
+            torch.bincount(train_bins[train_outcome == i], minlength=n_bins) + 0.5
             for i in range(len(outcome_cols))
         ]
     ).float()
-    base_probs = PassDistanceEngine.yards_proba(hist.log()[test_outcome], yardline)
+    base_logits = hist.log()[test_outcome]
+    base_probs = PassDistanceEngine.yards_proba(base_logits, yardline)
 
-    def scores(probs, mask):
-        p, y = probs[mask], y_test[mask]
-        ce = -p.gather(1, y.unsqueeze(1)).clamp_min(1e-12).log().mean()
+    def scores(logits, probs, mask):
+        p, y = probs[mask], test_bins[mask]
+        ce = criterion(logits[mask], y_test[mask])
         # CRPS: squared gap between predicted and actual CDFs, summed over yards.
         # Unlike cross-entropy it gives credit for being close to the right yard.
         step = (torch.arange(n_bins, device=y.device) >= y.unsqueeze(1)).float()
@@ -240,13 +281,13 @@ def _report_yards_metrics(
     groups = [(o.value, test_outcome == i) for i, o in enumerate(PASS_YARDS_OUTCOMES)]
     groups.append(("all", torch.ones_like(y_test, dtype=torch.bool)))
     for name, mask in groups:
-        ce_m, crps_m, yds_m, td_m = scores(model_probs, mask)
-        ce_b, crps_b, _, _ = scores(base_probs, mask)
-        actual = yards[y_test[mask]]
+        ce_m, crps_m, yds_m, td_m = scores(logits, model_probs, mask)
+        ce_b, crps_b, _, _ = scores(base_logits, base_probs, mask)
+        actual = yards[test_bins[mask]]
         td_act = (actual == yardline[mask]).float().mean().item()
         print(
             f"{name:<10}{int(mask.sum()):>7}  {ce_m:>7.3f}/{ce_b:<7.3f}  "
             f"{crps_m:>8.3f}/{crps_b:<8.3f}  {yds_m:>8.2f}/{actual.float().mean():<9.2f}"  # noqa: E501
             f"  {td_m:>7.4f}/{td_act:<8.4f}"
         )
-    return scores(model_probs, groups[-1][1])[0]
+    return scores(logits, model_probs, groups[-1][1])[0]

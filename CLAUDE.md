@@ -88,8 +88,13 @@ Run everything from the repo root; data paths are built from `Path.cwd()`.
   the only pass/run plays with no down). `PassOutcome.SCRAMBLE` exists because
   scrambles used to fall through to INCOMPLETE. `PassDistanceEngine` outputs logits
   over yard bins `PASS_YARDS_RANGE` (-30..99) for complete/scramble/sack, with the
-  outcome one-hot as input; `yards_proba`/`sample_yards` mask gains past the goal line
-  and losses past the end line. Judge both models by cross-entropy against the
+  outcome one-hot as input. Touchdowns and safeties are censored: the data records a
+  TD as exactly `yardline_100` yards though the play would have gone farther, so
+  targets say "at least"/"at most" and `core/trainer/losses.py`
+  `CensoredCrossEntropyLoss` scores them by the total probability past the bound.
+  `yards_proba`/`sample_yards` move probability past either end line onto the edge
+  bin (never drop it); the simulator calls TD when yards >= yardline_100. Before
+  this (2026-10-25) completions got P(TD) 3.5% vs 6.9% actual. Judge both models by cross-entropy against the
   class-frequency baseline (and CRPS for yards), not accuracy: the simulator samples
   probabilities. Old pass-outcome accuracy (~64%) predates the sack-leak fix.
 - Penalty engines (2026-10-24, `train_penalty_predictor.py`, replaced the never-trained

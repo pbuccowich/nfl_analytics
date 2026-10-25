@@ -39,7 +39,7 @@ class Solver:
         self.bestModel: nn.Module | None = None
         self.is_classification = isinstance(
             criterion, (nn.CrossEntropyLoss, nn.NLLLoss)
-        )
+        ) or getattr(criterion, "is_classification", False)
 
     def _dataset(self, x, y) -> TensorDataset:
         """Classification wants (N,) long targets; regression wants (N, 1) floats."""
